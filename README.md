@@ -54,6 +54,9 @@ den eigenen Mac. Erst für die Weitergabe an andere bräuchte es Developer ID + 
 - **Gedrückt halten** (Standard): Hotkey halten, sprechen, loslassen → Text erscheint.
 - **Umschalten**: 1× drücken = Start, nochmal = Stopp.
 - **Abbrechen**: Escape oder das X im Overlay – verwirft Aufnahme bzw. laufende Transkription.
+- **Wiedergabe pausieren**: Läuft Musik/Video (Music, Spotify, Browser …), wird sie beim Aufnahmestart
+  pausiert und nach dem Stopp fortgesetzt – nur, wenn die App sie selbst pausiert hat.
+  Abschaltbar unter Einstellungen → Audio. Technik: `Vendor/MediaRemoteAdapter` (BSD-3), siehe dortige README.
 - Zweiter Hotkey mit eigener Sprache: Einstellungen → Tastenkürzel.
 
 ## Datenschutz
@@ -70,9 +73,10 @@ LunaTranscribe/
   Audio/      AudioRecorder (AVAudioEngine → 16 kHz Float32), AudioDevices (CoreAudio)
   Engine/     TranscriptionEngine-Protokoll, CohereEngine, ParakeetEngine, ModelManager
   Hotkey/     KeyboardShortcuts-Namen (Default F2)
-  Output/     TextInjector (Pasteboard + ⌘V), Permissions
+  Output/     TextInjector (Pasteboard + ⌘V), Permissions, MediaPlaybackController (Wiedergabe pausieren)
   Settings/   SettingsStore, AppLanguage, SettingsView
   UI/         MenuBarView, OverlayController (schwebende Statusanzeige)
+Vendor/MediaRemoteAdapter/   Framework + Perl-Skript für Now-Playing-Zugriff (macOS ≥ 15.4), neu bauen: scripts/build-mediaremote-adapter.sh
 ```
 
 Post-Processing (Füllwörter entfernen etc.) ist bewusst noch nicht enthalten; der Hook dafür ist

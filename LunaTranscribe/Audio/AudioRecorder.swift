@@ -27,6 +27,10 @@ final class AudioRecorder {
     /// Aktueller Spitzenpegel 0…1 (für die Pegelanzeige im Overlay).
     private(set) var level: Float = 0
 
+    /// Wird einmal pro Aufnahme aufgerufen, sobald das erste Audio-Paket ankommt (Diagnose).
+    var onFirstBuffer: (() -> Void)?
+    private var firstBufferSeen = false
+
     var isRecording: Bool { engine?.isRunning ?? false }
 
     /// - Parameter deviceUID: leer/nil = System-Standardmikrofon
@@ -56,6 +60,7 @@ final class AudioRecorder {
 
         lock.lock(); samples.removeAll(keepingCapacity: true); lock.unlock()
         level = 0
+        firstBufferSeen = false
 
         input.installTap(onBus: 0, bufferSize: 4096, format: inFormat) { [weak self] buffer, _ in
             self?.append(buffer, converter: converter, outFormat: outFormat)
@@ -100,6 +105,11 @@ final class AudioRecorder {
 
         let n = Int(out.frameLength)
         guard n > 0 else { return }
+
+        if !firstBufferSeen {
+            firstBufferSeen = true
+            onFirstBuffer?()
+        }
 
         var peak: Float = 0
         vDSP_maxmgv(channel, 1, &peak, vDSP_Length(n))

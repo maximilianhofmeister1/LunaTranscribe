@@ -22,6 +22,9 @@ targets:
       - path: LunaTranscribe
         excludes:
           - "Info.plist"
+      # MediaRemoteAdapter-Skript → Contents/Resources (wird von /usr/bin/perl ausgeführt)
+      - path: Vendor/MediaRemoteAdapter/mediaremote-adapter.pl
+        buildPhase: resources
     info:
       path: LunaTranscribe/Info.plist
       properties:
@@ -52,6 +55,11 @@ targets:
     dependencies:
       - package: FluidAudio
       - package: KeyboardShortcuts
+      # Wird nicht gelinkt, nur eingebettet + signiert; perl lädt es zur Laufzeit.
+      - framework: Vendor/MediaRemoteAdapter/MediaRemoteAdapter.framework
+        embed: true
+        link: false
+        codeSign: true
 
 schemes:
   LunaTranscribe:

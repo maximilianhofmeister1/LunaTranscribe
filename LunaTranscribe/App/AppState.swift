@@ -1,6 +1,9 @@
 import AppKit
 import Combine
 import KeyboardShortcuts
+import os
+
+private let timingLog = Logger(subsystem: "com.maximhofmeister.LunaTranscribe", category: "timing")
 
 struct Transcript: Identifiable {
     let id = UUID()
@@ -30,6 +33,7 @@ final class AppState: ObservableObject {
     let models = ModelManager()
     private let recorder = AudioRecorder()
     private let overlay = OverlayController()
+    private let media = MediaPlaybackController()
 
     private var activeLanguage: AppLanguage = .german
     private var recordingStart: Date?
@@ -86,6 +90,7 @@ final class AppState: ObservableObject {
         case .recording:
             stopLevelTimer()
             _ = recorder.stop()   // Samples verwerfen
+            media.resumeIfPaused()
             playSound("Tink")
             status = .idle
         case .transcribing:
@@ -140,15 +145,32 @@ final class AppState: ObservableObject {
             return
         }
 
+        let t0 = Date()
+        let ms: @Sendable () -> Int = { Int(Date().timeIntervalSince(t0) * 1000) }
+        timingLog.notice("hotkey down")
+
         Task {
             guard await Permissions.requestMicrophone() else {
                 showNotice("Kein Mikrofon-Zugriff. Bitte in den Systemeinstellungen erlauben.")
                 Permissions.openMicrophoneSettings()
                 return
             }
+            timingLog.notice("permission ok +\(ms(), privacy: .public)ms")
+
+            // Wiedergabe parallel pausieren – darf den Mikrofonstart nicht aufhalten.
+            if settings.pauseMedia {
+                let media = self.media
+                Task.detached(priority: .userInitiated) {
+                    media.pauseIfPlaying()
+                    timingLog.notice("media paused +\(ms(), privacy: .public)ms")
+                }
+            }
             do {
+                recorder.onFirstBuffer = { timingLog.notice("first audio buffer +\(ms(), privacy: .public)ms") }
                 try recorder.start(deviceUID: settings.inputDeviceUID)
+                timingLog.notice("recorder started +\(ms(), privacy: .public)ms")
             } catch {
+                media.resumeIfPaused()
                 showNotice(error.localizedDescription)
                 return
             }
@@ -164,6 +186,7 @@ final class AppState: ObservableObject {
         stopLevelTimer()
         let samples = recorder.stop()
         let duration = Double(samples.count) / AudioRecorder.targetSampleRate
+        media.resumeIfPaused()
         playSound("Tink")
 
         // Zu kurz (versehentlicher Tastendruck) → ignorieren

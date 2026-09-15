@@ -44,6 +44,7 @@ struct SettingsView: View {
                 }
                 Button("Geräte aktualisieren") { devices = AudioDevices.inputDevices() }
                 Toggle("Töne bei Start/Stopp", isOn: $settings.playSounds)
+                Toggle("Wiedergabe (Musik, Videos) während der Aufnahme pausieren", isOn: $settings.pauseMedia)
             }
 
             Section("Modell") {
@@ -77,8 +78,9 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520)
-        .fixedSize(horizontal: false, vertical: true)
+        // Fenster frei skalierbar; Form scrollt bei Bedarf
+        .frame(minWidth: 480, idealWidth: 560, maxWidth: .infinity,
+               minHeight: 400, idealHeight: 760, maxHeight: .infinity)
         .onChange(of: settings.engine) { _, newEngine in
             // Sprachen ggf. auf etwas Unterstütztes zurücksetzen
             if !settings.primaryLanguage.isSupported(by: newEngine) { settings.primaryLanguage = .english }

@@ -29,6 +29,7 @@ final class SettingsStore: ObservableObject {
     @Published var recordingMode: RecordingMode { didSet { d.set(recordingMode.rawValue, forKey: "recordingMode") } }
     @Published var playSounds: Bool { didSet { d.set(playSounds, forKey: "playSounds") } }
     @Published var keepHistory: Bool { didSet { d.set(keepHistory, forKey: "keepHistory") } }
+    @Published var pauseMedia: Bool { didSet { d.set(pauseMedia, forKey: "pauseMedia") } }
 
     /// Autostart bei der Anmeldung über SMAppService (macOS 13+). Der Zustand lebt im System,
     /// nicht in UserDefaults – deshalb wird er hier gelesen und beim Setzen direkt registriert.
@@ -54,6 +55,7 @@ final class SettingsStore: ObservableObject {
         recordingMode = RecordingMode(rawValue: d.string(forKey: "recordingMode") ?? "") ?? .hold
         playSounds = d.object(forKey: "playSounds") as? Bool ?? true
         keepHistory = d.object(forKey: "keepHistory") as? Bool ?? true
+        pauseMedia = d.object(forKey: "pauseMedia") as? Bool ?? true
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
 
