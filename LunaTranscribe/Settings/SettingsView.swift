@@ -47,6 +47,23 @@ struct SettingsView: View {
                 Toggle("Wiedergabe (Musik, Videos) während der Aufnahme pausieren", isOn: $settings.pauseMedia)
             }
 
+            Section("Meeting") {
+                Toggle("Systemaudio (Zoom, Teams, Browser) zusätzlich zum Mikrofon aufnehmen", isOn: $settings.meetingCaptureSystemAudio)
+                Toggle("Aufnahme (WAV) nach der Verarbeitung behalten", isOn: $settings.meetingKeepAudio)
+                LabeledContent("Ablageordner") {
+                    HStack {
+                        Text(MeetingExporter.folder(from: settings.meetingExportFolder).path)
+                            .lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
+                        Button("Wählen…") { chooseMeetingFolder() }
+                        if !settings.meetingExportFolder.isEmpty {
+                            Button("Standard") { settings.meetingExportFolder = "" }
+                        }
+                    }
+                }
+                Text("Während des Meetings wird nur aufgenommen; Sprecher-Erkennung und Transkription laufen nach „Beenden“. Für Online-Meetings Kopfhörer nutzen, sonst hört das Mikrofon die Lautsprecher mit. Beim ersten Meeting fragt macOS nach der Berechtigung „Systemaudio aufnehmen“.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             Section("Modell") {
                 Picker("Engine", selection: $settings.engine) {
                     ForEach(EngineKind.allCases) { Text($0.label).tag($0) }
@@ -59,7 +76,7 @@ struct SettingsView: View {
 
             Section("Datenschutz") {
                 Toggle("Letzte Diktate im Menü anzeigen (nur im RAM, nie gespeichert)", isOn: $settings.keepHistory)
-                Text("Aufnahmen bleiben ausschließlich im Arbeitsspeicher und werden direkt nach der Transkription verworfen. Es werden keine Daten an Server gesendet.")
+                Text("Diktate bleiben ausschließlich im Arbeitsspeicher und werden direkt nach der Transkription verworfen. Meeting-Aufnahmen liegen während der Verarbeitung temporär in ~/Library/Caches und werden danach gelöscht (außer „Aufnahme behalten“). Es werden keine Daten an Server gesendet.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
@@ -85,6 +102,17 @@ struct SettingsView: View {
             // Sprachen ggf. auf etwas Unterstütztes zurücksetzen
             if !settings.primaryLanguage.isSupported(by: newEngine) { settings.primaryLanguage = .english }
             if !settings.secondaryLanguage.isSupported(by: newEngine) { settings.secondaryLanguage = .english }
+        }
+    }
+
+    private func chooseMeetingFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.directoryURL = MeetingExporter.folder(from: settings.meetingExportFolder)
+        if panel.runModal() == .OK, let url = panel.url {
+            settings.meetingExportFolder = url.path
         }
     }
 

@@ -37,19 +37,46 @@ enum AudioDevices {
     }
 
     static func defaultInputDevice() -> AudioInputDevice? {
+        guard let id = defaultDeviceID(selector: kAudioHardwarePropertyDefaultInputDevice) else { return nil }
+        return inputDevices().first { $0.id == id }
+    }
+
+    /// UID des Standard-Ausgabegeräts (Lautsprecher/Kopfhörer) – für das Meeting-Aggregate.
+    static func defaultOutputDeviceUID() -> String? {
+        guard let id = defaultDeviceID(selector: kAudioHardwarePropertyDefaultOutputDevice) else { return nil }
+        return uid(of: id)
+    }
+
+    private static func defaultDeviceID(selector: AudioObjectPropertySelector) -> AudioDeviceID? {
         var address = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mSelector: selector,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain)
         var id: AudioDeviceID = 0
         var size = UInt32(MemoryLayout<AudioDeviceID>.size)
-        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &id) == noErr else {
-            return nil
-        }
-        return inputDevices().first { $0.id == id }
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &id) == noErr,
+              id != kAudioObjectUnknown else { return nil }
+        return id
     }
 
-    private static func inputChannelCount(of id: AudioDeviceID) -> Int {
+    /// UID eines Geräts – nötig, um es in ein Aggregate-Device einzuhängen (SystemAudioTap).
+    static func uid(of id: AudioDeviceID) -> String? {
+        string(of: id, selector: kAudioDevicePropertyDeviceUID)
+    }
+
+    /// Liefert das Gerät gerade IO (irgendein Client hat es gestartet)?
+    static func isRunning(_ id: AudioDeviceID) -> Bool {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDeviceIsRunning,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var value: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &value) == noErr else { return false }
+        return value != 0
+    }
+
+    static func inputChannelCount(of id: AudioDeviceID) -> Int {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyStreamConfiguration,
             mScope: kAudioObjectPropertyScopeInput,

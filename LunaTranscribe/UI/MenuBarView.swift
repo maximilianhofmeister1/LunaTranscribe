@@ -35,6 +35,9 @@ struct MenuBarView: View {
                 }
             }
 
+            Divider()
+            meetingSection
+
             if !state.history.isEmpty {
                 Divider()
                 historySection
@@ -73,6 +76,62 @@ struct MenuBarView: View {
                 Permissions.requestAccessibility()
                 Permissions.openAccessibilitySettings()
             }
+        }
+    }
+
+    /// Meeting-Modus: Start/Stopp, Laufzeit, Verarbeitungsfortschritt. Läuft parallel zum Diktat.
+    @ViewBuilder
+    private var meetingSection: some View {
+        let meeting = state.meeting
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Meeting").font(.caption.bold()).foregroundStyle(.secondary)
+            switch meeting.status {
+            case .idle:
+                HStack {
+                    Button("Meeting starten") { meeting.start() }
+                        .disabled(!state.models.isReady)
+                    if meeting.transcript != nil {
+                        Button("Letztes Transkript…") { state.showMeetingResult() }
+                    }
+                }
+                speakerCountPicker
+            case .recording:
+                HStack(spacing: 8) {
+                    Image(systemName: "record.circle.fill").foregroundStyle(.red)
+                    Text("Aufnahme \(MeetingTranscript.clock(meeting.elapsed))").monospacedDigit()
+                    Spacer()
+                    Button("Beenden") { meeting.stop() }
+                    Button("Verwerfen") { meeting.cancel() }
+                }
+                Text(meeting.systemAudioActive ? "Mikrofon + Systemaudio · Diktieren weiterhin möglich"
+                                               : "Nur Mikrofon · Diktieren weiterhin möglich")
+                    .font(.caption).foregroundStyle(.secondary)
+                if settings.meetingCaptureSystemAudio && !meeting.systemAudioActive {
+                    Text("Systemaudio nicht verfügbar – Berechtigung prüfen.")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+                speakerCountPicker   // darf bis zum Beenden noch geändert werden
+            case .processing(let step, let fraction):
+                ProgressView(value: fraction) { Text(step).font(.caption) }
+                Button("Abbrechen") { meeting.cancel() }
+            case .failed(let message):
+                Label(message, systemImage: "xmark.circle").font(.caption).foregroundStyle(.red)
+                HStack {
+                    Button("OK") { meeting.dismissError() }
+                    if settings.meetingCaptureSystemAudio {
+                        Button("Systemaudio-Einstellungen…") { Permissions.openSystemAudioSettings() }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Bekannte Teilnehmerzahl hilft der Sprechererkennung enorm (bei leisen/ähnlichen Stimmen
+    /// landet sonst alles bei einem Sprecher). 0 = automatisch.
+    private var speakerCountPicker: some View {
+        Picker("Teilnehmer", selection: $settings.meetingSpeakerCount) {
+            Text("automatisch").tag(0)
+            ForEach(2...8, id: \.self) { Text("\($0)").tag($0) }
         }
     }
 

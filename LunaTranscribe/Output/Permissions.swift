@@ -23,6 +23,14 @@ enum Permissions {
         }
     }
 
+    /// „Systemaudio aufnehmen“ (für den Meeting-Modus). Es gibt keine öffentliche Status-API;
+    /// der Dialog erscheint beim ersten Erzeugen des Taps, danach hilft nur der Weg in die Einstellungen.
+    static func openSystemAudioSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AudioCapture") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     static var microphoneStatus: AVAuthorizationStatus {
         AVCaptureDevice.authorizationStatus(for: .audio)
     }

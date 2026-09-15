@@ -24,6 +24,8 @@
 	<string>15.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Im Meeting-Modus nimmt LunaTranscribe zusätzlich die Systemwiedergabe (z. B. Zoom, Teams) auf, um das Gespräch lokal zu transkribieren. Es wird nichts hochgeladen.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Maximilian Hofmeister</string>
 	<key>NSMicrophoneUsageDescription</key>

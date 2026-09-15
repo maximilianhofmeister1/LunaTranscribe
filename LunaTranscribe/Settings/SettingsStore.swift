@@ -31,6 +31,16 @@ final class SettingsStore: ObservableObject {
     @Published var keepHistory: Bool { didSet { d.set(keepHistory, forKey: "keepHistory") } }
     @Published var pauseMedia: Bool { didSet { d.set(pauseMedia, forKey: "pauseMedia") } }
 
+    // Meeting-Modus
+    /// Zusätzlich zum Mikrofon die Systemwiedergabe (Zoom, Teams …) aufnehmen.
+    @Published var meetingCaptureSystemAudio: Bool { didSet { d.set(meetingCaptureSystemAudio, forKey: "meetingCaptureSystemAudio") } }
+    /// Aufnahme (WAV) nach der Verarbeitung neben dem Transkript behalten statt löschen.
+    @Published var meetingKeepAudio: Bool { didSet { d.set(meetingKeepAudio, forKey: "meetingKeepAudio") } }
+    /// Ablageordner für Backups/Audio; "" = ~/Documents/LunaTranscribe Meetings
+    @Published var meetingExportFolder: String { didSet { d.set(meetingExportFolder, forKey: "meetingExportFolder") } }
+    /// Erwartete Teilnehmerzahl für die Sprechererkennung; 0 = automatisch.
+    @Published var meetingSpeakerCount: Int { didSet { d.set(meetingSpeakerCount, forKey: "meetingSpeakerCount") } }
+
     /// Autostart bei der Anmeldung über SMAppService (macOS 13+). Der Zustand lebt im System,
     /// nicht in UserDefaults – deshalb wird er hier gelesen und beim Setzen direkt registriert.
     @Published var launchAtLogin: Bool {
@@ -56,6 +66,10 @@ final class SettingsStore: ObservableObject {
         playSounds = d.object(forKey: "playSounds") as? Bool ?? true
         keepHistory = d.object(forKey: "keepHistory") as? Bool ?? true
         pauseMedia = d.object(forKey: "pauseMedia") as? Bool ?? true
+        meetingCaptureSystemAudio = d.object(forKey: "meetingCaptureSystemAudio") as? Bool ?? true
+        meetingKeepAudio = d.object(forKey: "meetingKeepAudio") as? Bool ?? false
+        meetingExportFolder = d.string(forKey: "meetingExportFolder") ?? ""
+        meetingSpeakerCount = d.integer(forKey: "meetingSpeakerCount")
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
 

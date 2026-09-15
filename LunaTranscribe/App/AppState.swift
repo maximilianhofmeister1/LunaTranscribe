@@ -31,9 +31,12 @@ final class AppState: ObservableObject {
 
     let settings = SettingsStore.shared
     let models = ModelManager()
+    /// Meeting-Modus: eigener Recorder und eigene Statusmaschine, läuft parallel zum Diktat.
+    let meeting: MeetingSession
     private let recorder = AudioRecorder()
     private let overlay = OverlayController()
     private let media = MediaPlaybackController()
+    private let meetingWindow = MeetingResultWindowController()
 
     private var activeLanguage: AppLanguage = .german
     private var recordingStart: Date?
@@ -44,6 +47,19 @@ final class AppState: ObservableObject {
     private var escapeMonitors: [Any] = []
 
     init() {
+        meeting = MeetingSession(settings: settings, models: models)
+        meetingWindow.bind(to: meeting)
+        // Menü und Menüleisten-Icon beobachten nur AppState – Meeting-Änderungen durchreichen.
+        meeting.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+        // Meeting-Fehler zusätzlich als Dialog: das Menü-Popover ist nach dem Klick oft schon zu.
+        meeting.$status
+            .removeDuplicates()
+            .sink { status in
+                if case .failed(let message) = status { Self.showMeetingAlert(message) }
+            }
+            .store(in: &cancellables)
         registerHotkeys()
 
         // Modell direkt beim Start laden, damit der erste Hotkey sofort reagiert.
@@ -67,8 +83,9 @@ final class AppState: ObservableObject {
 
     // MARK: Abbrechen (Escape / X im Overlay)
 
-    /// Escape bricht Aufnahme oder laufende Transkription ab – nur solange etwas läuft,
-    /// sonst wird die Taste nicht angefasst.
+    /// Escape bricht Diktat-Aufnahme oder laufende Transkription ab – nur solange etwas läuft,
+    /// sonst wird die Taste nicht angefasst. Ein laufendes Meeting ist davon bewusst ausgenommen:
+    /// das wird nur über das Menü beendet, damit kein versehentlicher Tastendruck eine Stunde Aufnahme verwirft.
     private func installEscapeMonitor() {
         let handler: (NSEvent) -> Void = { [weak self] event in
             guard event.keyCode == 53 else { return }  // kVK_Escape
@@ -230,6 +247,18 @@ final class AppState: ObservableObject {
     }
 
     func clearHistory() { history.removeAll() }
+
+    func showMeetingResult() { meetingWindow.show(session: meeting) }
+
+    private static func showMeetingAlert(_ message: String) {
+        let alert = NSAlert()
+        alert.messageText = "Meeting konnte nicht verarbeitet werden"
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
+    }
 
     // MARK: Helfer
 
