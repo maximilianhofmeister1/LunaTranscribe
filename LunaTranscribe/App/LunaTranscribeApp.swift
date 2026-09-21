@@ -2,11 +2,13 @@ import SwiftUI
 
 @main
 struct LunaTranscribeApp: App {
-    @StateObject private var state = AppState()
+    @StateObject private var state: AppState
 
     init() {
-        // Entwickler-Selbsttest der Meeting-Pipeline (siehe MeetingSelfTest); beendet den Prozess selbst.
-        _ = MeetingSelfTest.runIfRequested()
+        // Entwickler-Selbsttests (siehe MeetingSelfTest / RefineSelfTest); beenden den Prozess selbst.
+        // Läuft einer, lädt AppState keine Modelle vor – sonst konkurrieren zwei Downloads um dieselbe Datei.
+        let selfTestRunning = MeetingSelfTest.runIfRequested() || RefineSelfTest.runIfRequested()
+        _state = StateObject(wrappedValue: AppState(preloadModels: !selfTestRunning))
     }
 
     var body: some Scene {
@@ -27,6 +29,7 @@ struct LunaTranscribeApp: App {
         switch state.status {
         case .recording: return "waveform.circle.fill"
         case .transcribing: return "ellipsis.circle"
+        case .refining: return "sparkles"
         default:
             if state.meeting.isRecording { return "record.circle" }
             if state.meeting.isProcessing { return "ellipsis.circle" }

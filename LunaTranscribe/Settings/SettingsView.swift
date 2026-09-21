@@ -28,6 +28,8 @@ struct SettingsView: View {
                     ForEach(AppLanguage.supported(by: settings.engine)) { Text($0.displayName).tag($0) }
                 }
 
+                KeyboardShortcuts.Recorder("Diktieren + Nachbearbeitung (Hauptsprache):", name: .recordRefined)
+
                 Picker("Verhalten", selection: $settings.recordingMode) {
                     ForEach(RecordingMode.allCases) { Text($0.label).tag($0) }
                 }
@@ -64,13 +66,40 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
 
+            Section("Nachbearbeitung") {
+                Picker("Sprachmodell", selection: $settings.refinerKind) {
+                    ForEach(RefinerKind.allCases) { kind in
+                        refinerOption(kind).tag(kind)
+                    }
+                }
+                .pickerStyle(.radioGroup)
+                refinerStatus
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Anweisung an das Sprachmodell")
+                        Spacer()
+                        if !settings.isRefinePromptDefault {
+                            Button("Auf Standard zurücksetzen") { settings.resetRefinePrompt() }
+                        }
+                    }
+                    TextEditor(text: $settings.refinePrompt)
+                        .font(.system(.caption, design: .monospaced))
+                        .frame(minHeight: 140, maxHeight: 260)
+                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.quaternary))
+                    Text("Englisch funktioniert bei kleinen Modellen am zuverlässigsten. „{language}“ wird durch die Diktatsprache ersetzt. Ein leeres Feld nutzt den Standard. Beispielpaare (Deutsch/Englisch) hängt die App automatisch an.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Text("Der dritte Hotkey lässt ein lokales Sprachmodell das Diktat bereinigen: Rechtschreibung, Grammatik, Füllwörter, Wiederholungen und Versprecher – Wortwahl und Ton bleiben erhalten. Meeting-Transkripte sind nicht betroffen. Schlägt die Nachbearbeitung fehl, wird der Rohtext eingefügt. MLX-Modelle rechnen auf der GPU und liegen im Modellordner; Apple Intelligence nutzt das Systemmodell auf der Neural Engine.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             Section("Modell") {
                 Picker("Engine", selection: $settings.engine) {
                     ForEach(EngineKind.allCases) { Text($0.label).tag($0) }
                 }
                 .pickerStyle(.radioGroup)
                 modelStatus
-                Text("Modelle liegen in ~/Library/Application Support/LunaTranscribe/Models. Einmaliger Download von Hugging Face; danach arbeitet die App komplett offline.")
+                Text("Modelle (Transkription, Sprecher, Nachbearbeitung) liegen in ~/Library/Application Support/LunaTranscribe/Models. Einmaliger Download von Hugging Face; danach arbeitet die App komplett offline.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
@@ -119,6 +148,41 @@ struct SettingsView: View {
     private var defaultDeviceSuffix: String {
         if let d = AudioDevices.defaultInputDevice() { return " (\(d.name))" }
         return ""
+    }
+
+    /// Radio-Eintrag für ein Sprachmodell; nicht verfügbare Modelle sind ausgegraut und nennen den Grund.
+    @ViewBuilder
+    private func refinerOption(_ kind: RefinerKind) -> some View {
+        switch kind.availability {
+        case .available:
+            Text(kind.label)
+        case .unavailable(let reason):
+            VStack(alignment: .leading, spacing: 2) {
+                Text(kind.label)
+                Text(reason).font(.caption).foregroundStyle(.secondary)
+            }
+            .selectionDisabled()
+        }
+    }
+
+    @ViewBuilder
+    private var refinerStatus: some View {
+        switch state.refiners.state {
+        case .loading(let p):
+            HStack {
+                ProgressView(value: p)
+                Text(state.refiners.statusText).font(.caption)
+            }
+        case .ready(let kind):
+            Label("\(kind.shortLabel) bereit", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+        case .failed(let msg):
+            VStack(alignment: .leading) {
+                Label(msg, systemImage: "xmark.circle.fill").foregroundStyle(.red)
+                Button("Erneut versuchen") { state.refiners.retry(settings.refinerKind) }
+            }
+        case .idle:
+            Text("Kein Sprachmodell geladen")
+        }
     }
 
     @ViewBuilder

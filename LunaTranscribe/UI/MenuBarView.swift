@@ -8,6 +8,7 @@ struct MenuBarView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             statusRow
+            refinerStatusRow
 
             if !state.accessibilityGranted {
                 warningRow
@@ -26,10 +27,20 @@ struct MenuBarView: View {
             }
 
             HStack {
-                Button(state.status == .recording ? "Aufnahme stoppen" : "Aufnahme starten") {
-                    state.toggleRecordingFromMenu()
+                if state.status == .recording {
+                    Button("Aufnahme stoppen") { state.toggleRecordingFromMenu() }
+                } else {
+                    Button("Diktat starten") { state.toggleRecordingFromMenu() }
+                        .disabled(!state.models.isReady || state.status == .transcribing || state.status == .refining)
+                    Button {
+                        state.toggleRecordingFromMenu(refine: true)
+                    } label: {
+                        Label("Diktat + Nachbearbeitung", systemImage: "sparkles")
+                    }
+                    .disabled(!state.models.isReady || state.status == .transcribing || state.status == .refining)
+                    .help(state.refiners.isReady ? "Diktat wird vom Sprachmodell bereinigt (wie Hotkey 3)"
+                                                 : "Sprachmodell lädt noch – bis dahin wird der Rohtext eingefügt")
                 }
-                .disabled(!state.models.isReady || state.status == .transcribing)
                 if state.status != .idle {
                     Button("Abbrechen (Esc)") { state.cancel() }
                 }
@@ -63,6 +74,25 @@ struct MenuBarView: View {
             Image(systemName: statusSymbol).foregroundStyle(statusColor)
             Text(statusText).font(.callout)
             Spacer()
+        }
+    }
+
+    /// Sprachmodell für die Nachbearbeitung – nur sichtbar, solange es lädt oder fehlgeschlagen ist.
+    @ViewBuilder
+    private var refinerStatusRow: some View {
+        switch state.refiners.state {
+        case .loading:
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles").foregroundStyle(.secondary)
+                Text(state.refiners.statusText).font(.caption).foregroundStyle(.secondary)
+            }
+        case .failed(let message):
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles").foregroundStyle(.orange)
+                Text("Nachbearbeitung: \(message)").font(.caption).foregroundStyle(.secondary).lineLimit(2)
+            }
+        case .idle, .ready:
+            EmptyView()
         }
     }
 
@@ -148,13 +178,17 @@ struct MenuBarView: View {
                     NSPasteboard.general.setString(t.text, forType: .string)
                 } label: {
                     HStack {
+                        if t.rawText != nil {
+                            Image(systemName: "sparkles").font(.caption2).foregroundStyle(.secondary)
+                        }
                         Text(t.text).lineLimit(1).font(.caption)
                         Spacer()
                         Text(String(format: "%.1fs", t.processingSeconds)).font(.caption2).foregroundStyle(.tertiary)
                     }
                 }
                 .buttonStyle(.plain)
-                .help("Klicken kopiert den Text in die Zwischenablage")
+                .help(t.rawText.map { "Klicken kopiert den Text in die Zwischenablage\n\nRohtext: \($0)" }
+                      ?? "Klicken kopiert den Text in die Zwischenablage")
             }
         }
     }
@@ -164,6 +198,7 @@ struct MenuBarView: View {
         switch state.status {
         case .recording: return "Aufnahme läuft"
         case .transcribing: return "Transkribiere…"
+        case .refining: return "Formuliere…"
         case .notice(let t): return t
         case .idle: return state.models.statusText
         }
@@ -172,6 +207,7 @@ struct MenuBarView: View {
     private var statusSymbol: String {
         if case .recording = state.status { return "record.circle.fill" }
         if case .transcribing = state.status { return "waveform.circle" }
+        if case .refining = state.status { return "sparkles" }
         if case .failed = state.models.state { return "xmark.circle" }
         if case .loading = state.models.state { return "arrow.down.circle" }
         return "checkmark.circle"

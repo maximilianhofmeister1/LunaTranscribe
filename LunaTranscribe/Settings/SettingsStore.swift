@@ -41,6 +41,20 @@ final class SettingsStore: ObservableObject {
     /// Erwartete Teilnehmerzahl für die Sprechererkennung; 0 = automatisch.
     @Published var meetingSpeakerCount: Int { didSet { d.set(meetingSpeakerCount, forKey: "meetingSpeakerCount") } }
 
+    // Nachbearbeitung (dritter Hotkey)
+    /// Sprachmodell, das Diktate bereinigt.
+    @Published var refinerKind: RefinerKind { didSet { d.set(refinerKind.rawValue, forKey: "refinerKind") } }
+    /// System-Anweisung für das Sprachmodell, in den Einstellungen editierbar (`{language}` = Diktatsprache).
+    /// Gespeichert wird nur eine Abweichung vom Standard; `resetRefinePrompt()` stellt ihn wieder her.
+    @Published var refinePrompt: String {
+        didSet {
+            if refinePrompt == RefinePrompt.defaultTemplate { d.removeObject(forKey: "refinePrompt") }
+            else { d.set(refinePrompt, forKey: "refinePrompt") }
+        }
+    }
+    var isRefinePromptDefault: Bool { refinePrompt == RefinePrompt.defaultTemplate }
+    func resetRefinePrompt() { refinePrompt = RefinePrompt.defaultTemplate }
+
     /// Autostart bei der Anmeldung über SMAppService (macOS 13+). Der Zustand lebt im System,
     /// nicht in UserDefaults – deshalb wird er hier gelesen und beim Setzen direkt registriert.
     @Published var launchAtLogin: Bool {
@@ -70,6 +84,8 @@ final class SettingsStore: ObservableObject {
         meetingKeepAudio = d.object(forKey: "meetingKeepAudio") as? Bool ?? false
         meetingExportFolder = d.string(forKey: "meetingExportFolder") ?? ""
         meetingSpeakerCount = d.integer(forKey: "meetingSpeakerCount")
+        refinerKind = RefinerKind(rawValue: d.string(forKey: "refinerKind") ?? "") ?? .lfm2_1_2b
+        refinePrompt = d.string(forKey: "refinePrompt") ?? RefinePrompt.defaultTemplate
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
 

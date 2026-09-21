@@ -61,6 +61,9 @@ struct OverlayView: View {
             case .transcribing:
                 ProgressView().controlSize(.small)
                 Text("Transkribiere…").font(.system(size: 13, weight: .medium))
+            case .refining:
+                ProgressView().controlSize(.small)
+                Text("Formuliere…").font(.system(size: 13, weight: .medium))
             case .notice(let text):
                 Image(systemName: "info.circle")
                 Text(text).font(.system(size: 13)).lineLimit(2)

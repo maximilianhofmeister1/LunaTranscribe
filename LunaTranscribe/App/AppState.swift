@@ -12,6 +12,14 @@ struct Transcript: Identifiable {
     let language: AppLanguage
     let durationSeconds: Double
     let processingSeconds: Double
+    /// Unbereinigtes ASR-Ergebnis, nur gesetzt, wenn `text` vom Sprachmodell nachbearbeitet wurde.
+    var rawText: String? = nil
+}
+
+/// Was ein Hotkey-Druck auslöst: Sprache des Diktats und ob das Sprachmodell nachbearbeitet.
+struct DictationRequest: Equatable {
+    let language: AppLanguage
+    let refine: Bool
 }
 
 /// Zentraler Zustand der App. Verbindet Hotkeys, Aufnahme, Engine und Texteinfügen.
@@ -21,6 +29,8 @@ final class AppState: ObservableObject {
         case idle
         case recording
         case transcribing
+        /// Sprachmodell bereinigt den Text (nur dritter Hotkey).
+        case refining
         case notice(String)
     }
 
@@ -31,6 +41,8 @@ final class AppState: ObservableObject {
 
     let settings = SettingsStore.shared
     let models = ModelManager()
+    /// Sprachmodell für die Nachbearbeitung (dritter Hotkey); wird wie die ASR beim Start geladen.
+    let refiners = RefinerManager()
     /// Meeting-Modus: eigener Recorder und eigene Statusmaschine, läuft parallel zum Diktat.
     let meeting: MeetingSession
     private let recorder = AudioRecorder()
@@ -38,7 +50,7 @@ final class AppState: ObservableObject {
     private let media = MediaPlaybackController()
     private let meetingWindow = MeetingResultWindowController()
 
-    private var activeLanguage: AppLanguage = .german
+    private var activeRequest = DictationRequest(language: .german, refine: false)
     private var recordingStart: Date?
     private var levelTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
@@ -46,7 +58,9 @@ final class AppState: ObservableObject {
     private var transcriptionGeneration = 0
     private var escapeMonitors: [Any] = []
 
-    init() {
+    /// - Parameter preloadModels: ASR- und Sprachmodell sofort laden (Normalfall). Selbsttests
+    ///   laden ihre Modelle selbst und schalten das ab.
+    init(preloadModels: Bool = true) {
         meeting = MeetingSession(settings: settings, models: models)
         meetingWindow.bind(to: meeting)
         // Menü und Menüleisten-Icon beobachten nur AppState – Meeting-Änderungen durchreichen.
@@ -62,12 +76,24 @@ final class AppState: ObservableObject {
             .store(in: &cancellables)
         registerHotkeys()
 
-        // Modell direkt beim Start laden, damit der erste Hotkey sofort reagiert.
-        models.ensureLoaded(settings.engine)
+        // Modelle direkt beim Start laden, damit der erste Hotkey sofort reagiert.
+        if preloadModels {
+            models.ensureLoaded(settings.engine)
+            refiners.ensureLoaded(settings.refinerKind)
+        }
         settings.$engine
             .dropFirst()
             .removeDuplicates()
             .sink { [weak self] kind in self?.models.ensureLoaded(kind) }
+            .store(in: &cancellables)
+        settings.$refinerKind
+            .dropFirst()
+            .removeDuplicates()
+            .sink { [weak self] kind in self?.refiners.ensureLoaded(kind) }
+            .store(in: &cancellables)
+        // Menü und Einstellungen beobachten nur AppState – Ladefortschritt des Sprachmodells durchreichen.
+        refiners.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
 
         overlay.bind(to: self)
@@ -110,7 +136,7 @@ final class AppState: ObservableObject {
             media.resumeIfPaused()
             playSound("Tink")
             status = .idle
-        case .transcribing:
+        case .transcribing, .refining:
             transcriptionGeneration += 1   // laufendes Ergebnis wird ignoriert
             status = .idle
         case .notice:
@@ -127,11 +153,16 @@ final class AppState: ObservableObject {
         KeyboardShortcuts.onKeyUp(for: .recordPrimary) { [weak self] in self?.hotkeyUp(.primary) }
         KeyboardShortcuts.onKeyDown(for: .recordSecondary) { [weak self] in self?.hotkeyDown(.secondary) }
         KeyboardShortcuts.onKeyUp(for: .recordSecondary) { [weak self] in self?.hotkeyUp(.secondary) }
+        KeyboardShortcuts.onKeyDown(for: .recordRefined) { [weak self] in self?.hotkeyDown(.refined) }
+        KeyboardShortcuts.onKeyUp(for: .recordRefined) { [weak self] in self?.hotkeyUp(.refined) }
     }
 
-    private func language(for slot: HotkeySlot) -> AppLanguage {
-        let raw = slot == .primary ? settings.primaryLanguage : settings.secondaryLanguage
-        return settings.languageForEngine(raw)
+    private func request(for slot: HotkeySlot) -> DictationRequest {
+        switch slot {
+        case .primary: return DictationRequest(language: settings.languageForEngine(settings.primaryLanguage), refine: false)
+        case .secondary: return DictationRequest(language: settings.languageForEngine(settings.secondaryLanguage), refine: false)
+        case .refined: return DictationRequest(language: settings.languageForEngine(settings.primaryLanguage), refine: true)
+        }
     }
 
     private func hotkeyDown(_ slot: HotkeySlot) {
@@ -139,8 +170,8 @@ final class AppState: ObservableObject {
         case .recording:
             if settings.recordingMode == .toggle { stopRecordingAndTranscribe() }
         case .idle, .notice:
-            startRecording(language: language(for: slot))
-        case .transcribing:
+            startRecording(request(for: slot))
+        case .transcribing, .refining:
             break
         }
     }
@@ -152,11 +183,12 @@ final class AppState: ObservableObject {
 
     // MARK: Aufnahme
 
-    func toggleRecordingFromMenu() {
-        if status == .recording { stopRecordingAndTranscribe() } else { startRecording(language: language(for: .primary)) }
+    /// Menü-Buttons: Diktat in der Hauptsprache, wahlweise mit Nachbearbeitung (wie Hotkey 1 bzw. 3).
+    func toggleRecordingFromMenu(refine: Bool = false) {
+        if status == .recording { stopRecordingAndTranscribe() } else { startRecording(request(for: refine ? .refined : .primary)) }
     }
 
-    private func startRecording(language: AppLanguage) {
+    private func startRecording(_ request: DictationRequest) {
         guard models.isReady, let _ = models.current else {
             showNotice(modelNoticeText())
             return
@@ -191,7 +223,7 @@ final class AppState: ObservableObject {
                 showNotice(error.localizedDescription)
                 return
             }
-            activeLanguage = language
+            activeRequest = request
             recordingStart = Date()
             status = .recording
             playSound("Pop")
@@ -213,7 +245,7 @@ final class AppState: ObservableObject {
         }
 
         status = .transcribing
-        let language = activeLanguage
+        let request = activeRequest
         let keepHistory = settings.keepHistory
         transcriptionGeneration += 1
         let generation = transcriptionGeneration
@@ -221,28 +253,59 @@ final class AppState: ObservableObject {
         Task {
             let t0 = Date()
             do {
-                let text = try await engine.transcribe(samples, language: language)
+                let rawText = try await engine.transcribe(samples, language: request.language)
                 // `samples` verlässt hier den Scope – die Aufnahme existiert danach nirgends mehr.
-                let elapsed = Date().timeIntervalSince(t0)
+                timingLog.notice("transcribed +\(Int(Date().timeIntervalSince(t0) * 1000), privacy: .public)ms")
 
                 // Wurde inzwischen abgebrochen (Escape/X)? Dann Ergebnis verwerfen.
                 guard generation == transcriptionGeneration else { return }
-
-                if text.isEmpty {
+                guard !rawText.isEmpty else {
                     showNotice("Nichts erkannt.")
-                } else {
-                    TextInjector.insert(text)
-                    if keepHistory {
-                        history.insert(Transcript(date: Date(), text: text, language: language,
-                                                  durationSeconds: duration, processingSeconds: elapsed), at: 0)
-                        if history.count > 20 { history.removeLast(history.count - 20) }
-                    }
-                    status = .idle
+                    return
                 }
+
+                var text = rawText
+                var fallbackNotice: String?
+                if request.refine {
+                    status = .refining
+                    (text, fallbackNotice) = await refine(rawText, language: request.language)
+                    timingLog.notice("refined +\(Int(Date().timeIntervalSince(t0) * 1000), privacy: .public)ms")
+                    guard generation == transcriptionGeneration else { return }
+                }
+                let elapsed = Date().timeIntervalSince(t0)
+
+                TextInjector.insert(text)
+                if keepHistory {
+                    var entry = Transcript(date: Date(), text: text, language: request.language,
+                                           durationSeconds: duration, processingSeconds: elapsed)
+                    if text != rawText { entry.rawText = rawText }
+                    history.insert(entry, at: 0)
+                    if history.count > 20 { history.removeLast(history.count - 20) }
+                }
+                if let fallbackNotice { showNotice(fallbackNotice) } else { status = .idle }
             } catch {
                 guard generation == transcriptionGeneration else { return }
                 showNotice("Fehler: \(error.localizedDescription)")
             }
+        }
+    }
+
+    /// Lässt das Sprachmodell den Text bereinigen. Ein Diktat geht nie verloren: Bei jedem Problem
+    /// (Modell lädt noch, Fehler, Timeout, unplausible Antwort) kommt der Rohtext zurück, dazu ein Hinweis.
+    private func refine(_ rawText: String, language: AppLanguage) async -> (text: String, notice: String?) {
+        guard let refiner = refiners.current else {
+            let reason: String
+            if case .failed(let message) = refiners.state { reason = message } else { reason = "Sprachmodell lädt noch" }
+            return (rawText, "\(reason) – Rohtext eingefügt.")
+        }
+        do {
+            let refined = try await refiner.refine(rawText, language: language, promptTemplate: settings.refinePrompt)
+            return (refined, nil)
+        } catch is CancellationError {
+            return (rawText, nil)
+        } catch {
+            timingLog.error("refine failed: \(error.localizedDescription, privacy: .public)")
+            return (rawText, "Nachbearbeitung fehlgeschlagen – Rohtext eingefügt.")
         }
     }
 
