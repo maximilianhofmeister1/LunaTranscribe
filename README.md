@@ -274,8 +274,9 @@ Weil die Bibliothek aus normalen Ordnern mit JSON und Markdown besteht, kann Cla
 cd ~/Documents/"LunaTranscribe Meetings" && claude "Fasse alle Meetings dieser Woche zusammen und liste offene Aufgaben je Person"
 ```
 
-Geplant ist ein eigener, lokal laufender **MCP-Server** (`luna-mcp`), über den auch Claude Desktop die Meetings durchsuchen
-und lesen kann – mit Freigabe-Schalter, vertraulichen Meetings und Zugriffsprotokoll. Plan und Stand:
+Geplant ist ein eigener, lokal laufender **MCP-Server** (`luna-mcp`), über den auch Claude Desktop die Meetings inhaltlich
+durchsuchen und lesen, Sprecher benennen, Meetings umbenennen und – nur nach deiner Bestätigung – löschen kann; mit
+Freigabe-Schaltern, vertraulichen Meetings und Protokoll. Plan und Stand:
 [docs/MCP-Server-Plan.md](docs/MCP-Server-Plan.md).
 
 ## Datenschutz
