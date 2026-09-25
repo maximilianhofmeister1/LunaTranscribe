@@ -274,6 +274,10 @@ Weil die Bibliothek aus normalen Ordnern mit JSON und Markdown besteht, kann Cla
 cd ~/Documents/"LunaTranscribe Meetings" && claude "Fasse alle Meetings dieser Woche zusammen und liste offene Aufgaben je Person"
 ```
 
+Geplant ist ein eigener, lokal laufender **MCP-Server** (`luna-mcp`), über den auch Claude Desktop die Meetings durchsuchen
+und lesen kann – mit Freigabe-Schalter, vertraulichen Meetings und Zugriffsprotokoll. Plan und Stand:
+[docs/MCP-Server-Plan.md](docs/MCP-Server-Plan.md).
+
 ## Datenschutz
 
 - Diktat-Audio bleibt nur im RAM (16 kHz mono ≈ 4 MB/min) und wird direkt nach der Transkription verworfen.
