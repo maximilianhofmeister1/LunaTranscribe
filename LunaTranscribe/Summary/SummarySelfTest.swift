@@ -1,4 +1,5 @@
 import Foundation
+import LunaCore
 
 /// Entwickler-Einstieg für die Zusammenfassung über die Claude CLI – über denselben Code wie der
 /// Button in der App (`ClaudeCLI`, `SummaryPrompt`), ohne Modelle und ohne Berechtigungen:

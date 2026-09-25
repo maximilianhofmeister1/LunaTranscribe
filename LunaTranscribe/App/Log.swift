@@ -11,4 +11,6 @@ enum Log {
     static let refine = Logger(subsystem: subsystem, category: "refine")
     static let vocabulary = Logger(subsystem: subsystem, category: "vocabulary")
     static let summary = Logger(subsystem: subsystem, category: "summary")
+    /// Suchindex und Embedding-Modell (luna-mcp loggt unter der Kategorie „mcp“).
+    static let search = Logger(subsystem: subsystem, category: "search")
 }

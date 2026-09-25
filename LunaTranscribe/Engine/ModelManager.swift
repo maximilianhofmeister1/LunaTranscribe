@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import LunaCore
 
 /// Hält genau eine geladene Engine im Speicher und wechselt sie bei Bedarf.
 @MainActor

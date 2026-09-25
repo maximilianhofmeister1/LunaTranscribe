@@ -1,5 +1,6 @@
 import Foundation
 import FoundationModels
+import LunaCore
 
 /// Sprachmodelle für die Diktat-Nachbearbeitung. Gleiche Rolle wie `EngineKind` für die ASR.
 enum RefinerKind: String, CaseIterable, Identifiable {

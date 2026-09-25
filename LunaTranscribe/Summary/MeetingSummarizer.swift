@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import LunaCore
 
 /// Erstellt Meeting-Zusammenfassungen über die Claude CLI. Läuft je Meeting höchstens einmal
 /// gleichzeitig und schreibt das Ergebnis selbst in die Bibliothek – auch wenn das Meeting
@@ -29,6 +30,11 @@ final class MeetingSummarizer: ObservableObject {
         let id = transcript.id
         guard !running.contains(id) else { return }
         errors[id] = nil
+        // Vertraulich heißt: kein Text an Anthropic – weder über luna-mcp noch über die Zusammenfassung.
+        guard !transcript.confidential else {
+            errors[id] = "Dieses Meeting ist als vertraulich markiert und wird nicht an Claude geschickt."
+            return
+        }
 
         guard let cli = ClaudeCLI.locate(customPath: settings.claudeCLIPath) else {
             errors[id] = ClaudeCLI.CLIError.notFound.localizedDescription
@@ -82,6 +88,9 @@ final class MeetingSummarizer: ObservableObject {
             var latest = try store.load(id)
             latest.summary = summary
             try store.update(latest)
+        } catch MeetingStore.StoreError.notFound {
+            // Inzwischen gelöscht (z. B. von Claude über luna-mcp) – das Ergebnis hat kein Ziel mehr.
+            Log.summary.notice("summary discarded: meeting no longer exists")
         } catch {
             errors[id] = "Zusammenfassung erstellt, aber nicht gespeichert: \(error.localizedDescription)"
         }

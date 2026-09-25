@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import LunaCore
 
 /// Die Meeting-Bibliothek: ein Unterordner pro Meeting im frei wählbaren Meeting-Ordner.
 ///
@@ -8,9 +9,14 @@ import Combine
 ///         summary.md     – Zusammenfassung als Markdown (für Finder, Quick Look, Claude CLI)
 ///         audio.wav      – nur mit „Aufnahme behalten“
 ///
+/// Lesen und Schreiben laufen über `MeetingLibrary` (LunaCore) – dieselben Funktionen nutzt luna-mcp.
+///
 /// Invariante: **Ein Transkript geht nie verloren.** Ist der Meeting-Ordner nicht erreichbar, landet
 /// ein neues Meeting im Rettungsordner (`AppPaths.unsavedMeetings`) und zieht beim nächsten
 /// erfolgreichen Laden automatisch in die Bibliothek um.
+///
+/// Änderungen von außen (Claude über luna-mcp: umbenennen, Sprecher benennen, löschen) meldet das
+/// Aktivitätsprotokoll; der Store lädt dann neu und sendet `externalChanges`.
 @MainActor
 final class MeetingStore: ObservableObject {
     /// Kopfdaten eines Meetings für Listen – ohne die (großen) Turns.
@@ -21,23 +27,30 @@ final class MeetingStore: ObservableObject {
         let durationSeconds: TimeInterval
         let speakerCount: Int
         var hasSummary: Bool
+        var isConfidential: Bool
         let folder: URL
         /// Liegt im Rettungsordner, weil der Meeting-Ordner nicht erreichbar war.
         let isUnsaved: Bool
     }
 
-    static let transcriptFileName = "meeting.json"
-    static let summaryFileName = "summary.md"
-    static let audioFileName = "audio.wav"
+    static let transcriptFileName = MeetingLibrary.transcriptFileName
+    static let summaryFileName = MeetingLibrary.summaryFileName
+    static let audioFileName = MeetingLibrary.audioFileName
 
     @Published private(set) var entries: [Entry] = []
     /// Gesetzt, wenn der Meeting-Ordner nicht angelegt oder gelesen werden kann.
     @Published private(set) var folderIssue: String?
 
+    /// Meetings, die Claude über luna-mcp geändert oder gelöscht hat (nach dem Neuladen gesendet).
+    let externalChanges = PassthroughSubject<Set<UUID>, Never>()
+
     private let settings: SettingsStore
     private var cancellables = Set<AnyCancellable>()
     /// Volltext je Meeting (klein geschrieben) für die Suche; wird bei Bedarf gefüllt.
     private var searchIndex: [UUID: String] = [:]
+    private let activityLog = ActivityLog()
+    /// Zuletzt gesehene Änderung im Aktivitätsprotokoll.
+    private var lastActivity = Date()
 
     var libraryFolder: URL { settings.meetingFolderURL }
 
@@ -50,6 +63,7 @@ final class MeetingStore: ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.reload() }
             .store(in: &cancellables)
+        watchActivityLog()
     }
 
     // MARK: Lesen
@@ -74,8 +88,7 @@ final class MeetingStore: ObservableObject {
     func entry(for id: UUID) -> Entry? { entries.first { $0.id == id } }
 
     func load(_ id: UUID) throws -> MeetingTranscript {
-        guard let entry = entry(for: id) else { throw StoreError.notFound }
-        return try Self.readTranscript(in: entry.folder)
+        try MeetingLibrary.readTranscript(in: try currentFolder(for: id))
     }
 
     /// Meetings, deren Titel, Sprecher, Zusammenfassung oder Text `query` enthalten.
@@ -95,7 +108,7 @@ final class MeetingStore: ObservableObject {
     func add(_ transcript: MeetingTranscript, audioURL: URL? = nil) -> Entry? {
         let target = folderIssue == nil ? libraryFolder : AppPaths.unsavedMeetings
         do {
-            let folder = try write(transcript, into: target, existing: nil)
+            let folder = try MeetingLibrary.write(transcript, into: target, existing: nil)
             if let audioURL {
                 try? FileManager.default.moveItem(at: audioURL, to: folder.appending(path: Self.audioFileName))
             }
@@ -103,7 +116,7 @@ final class MeetingStore: ObservableObject {
             // Letzte Rettung: Rettungsordner. Scheitert auch das, bleibt nur der Fehler im Log.
             Log.meeting.error("saving meeting failed: \(error.localizedDescription, privacy: .public)")
             if target != AppPaths.unsavedMeetings {
-                _ = try? write(transcript, into: AppPaths.unsavedMeetings, existing: nil)
+                _ = try? MeetingLibrary.write(transcript, into: AppPaths.unsavedMeetings, existing: nil)
             }
         }
         reload()
@@ -113,99 +126,114 @@ final class MeetingStore: ObservableObject {
     /// Speichert Änderungen (Titel, Sprecher, Text, Zusammenfassung). Benennt den Ordner um, wenn
     /// sich der Titel geändert hat.
     func update(_ transcript: MeetingTranscript) throws {
-        guard let entry = entry(for: transcript.id) else { throw StoreError.notFound }
-        let parent = entry.folder.deletingLastPathComponent()
-        let folder = try write(transcript, into: parent, existing: entry.folder)
+        let current = try currentFolder(for: transcript.id)
+        let isUnsaved = entry(for: transcript.id)?.isUnsaved ?? false
+        let folder = try MeetingLibrary.write(transcript, into: current.deletingLastPathComponent(), existing: current)
         searchIndex[transcript.id] = Self.searchText(of: transcript)
         if let index = entries.firstIndex(where: { $0.id == transcript.id }) {
-            entries[index] = Self.entry(for: transcript, folder: folder, unsaved: entry.isUnsaved)
+            entries[index] = Self.entry(for: transcript, folder: folder, unsaved: isUnsaved)
         }
+    }
+
+    /// Speichert Änderungen aus einem geöffneten Meeting. Hat luna-mcp die Datei seit `base` (dem zuletzt
+    /// geladenen oder gespeicherten Stand) geändert, werden beide Seiten zusammengeführt: Was der Nutzer
+    /// geändert hat, gewinnt, alles andere kommt von der Platte. Gibt den gespeicherten Stand zurück.
+    func save(_ local: MeetingTranscript, base: MeetingTranscript) throws -> MeetingTranscript {
+        let disk = try load(local.id)
+        let merged = disk == base ? local : MeetingLibrary.merge(local: local, base: base, disk: disk)
+        if merged != disk { try update(merged) }
+        return merged
     }
 
     /// Verschiebt ein Meeting in den Papierkorb (wiederherstellbar über den Finder).
     func delete(_ id: UUID) throws {
-        guard let entry = entry(for: id) else { return }
-        try FileManager.default.trashItem(at: entry.folder, resultingItemURL: nil)
+        guard entry(for: id) != nil else { return }
+        try MeetingLibrary.moveToTrash(try currentFolder(for: id))
         entries.removeAll { $0.id == id }
         searchIndex[id] = nil
     }
 
     func revealInFinder(_ id: UUID) {
-        guard let entry = entry(for: id) else { return }
-        NSWorkspace.shared.activateFileViewerSelecting([entry.folder])
+        guard let folder = try? currentFolder(for: id) else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([folder])
     }
 
     /// Zieht alle Meetings aus `oldFolder` in den aktuell eingestellten Meeting-Ordner um.
     func moveMeetings(from oldFolder: URL) throws {
         let fm = FileManager.default
         try fm.createDirectory(at: libraryFolder, withIntermediateDirectories: true)
-        for folder in Self.meetingFolders(in: oldFolder) {
-            try fm.moveItem(at: folder, to: Self.uniqueURL(in: libraryFolder, name: folder.lastPathComponent))
+        for folder in MeetingLibrary.meetingFolders(in: oldFolder) {
+            try fm.moveItem(at: folder, to: MeetingLibrary.uniqueURL(in: libraryFolder, name: folder.lastPathComponent))
         }
         reload()
+    }
+
+    /// Macht eine Umbenennung durch Claude rückgängig – nur, wenn seitdem niemand denselben Wert geändert hat.
+    func undo(_ change: ActivityEntry) throws {
+        guard let id = change.meetingIDs.first, let old = change.oldValue else { return }
+        var transcript = try load(id)
+        switch change.action {
+        case .renameMeeting:
+            guard transcript.title == change.newValue else { throw UndoError.changedSince }
+            transcript.title = old
+        case .renameSpeaker:
+            guard let speaker = change.speakerID, transcript.displayName(for: speaker) == change.newValue else {
+                throw UndoError.changedSince
+            }
+            if old == speaker { transcript.speakerNames.removeValue(forKey: speaker) } else { transcript.speakerNames[speaker] = old }
+        case .read, .search, .delete, .deleteDeclined:
+            return
+        }
+        try update(transcript)
+        externalChanges.send([id])
+    }
+
+    enum UndoError: LocalizedError {
+        case changedSince
+        var errorDescription: String? { "Der Wert wurde seitdem erneut geändert – bitte direkt im Meeting anpassen." }
+    }
+
+    /// Alle Meetings mit Inhalt (für den Suchindex). Liest von der Platte – im Hintergrund aufrufen.
+    nonisolated static func storedMeetings(libraryFolder: URL) -> [StoredMeeting] {
+        MeetingLibrary.scan(libraryFolder) + MeetingLibrary.scan(AppPaths.unsavedMeetings, unsaved: true)
     }
 
     // MARK: Intern
 
     enum StoreError: LocalizedError {
         case notFound
-        var errorDescription: String? { "Das Meeting wurde nicht gefunden – vielleicht wurde es im Finder verschoben." }
+        var errorDescription: String? { "Das Meeting wurde nicht gefunden – vielleicht wurde es im Finder verschoben oder gelöscht." }
     }
 
-    /// Schreibt `meeting.json` (atomar) und `summary.md` und gibt den (ggf. umbenannten) Ordner zurück.
-    private func write(_ transcript: MeetingTranscript, into parent: URL, existing: URL?) throws -> URL {
-        let fm = FileManager.default
-        try fm.createDirectory(at: parent, withIntermediateDirectories: true)
-        let wantedName = Self.folderName(for: transcript)
-
-        var folder: URL
-        if let existing {
-            folder = existing
-            if existing.lastPathComponent != wantedName {
-                let renamed = Self.uniqueURL(in: parent, name: wantedName)
-                try fm.moveItem(at: existing, to: renamed)
-                folder = renamed
-            }
-        } else {
-            folder = Self.uniqueURL(in: parent, name: wantedName)
-            try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+    /// Ordner eines Meetings. Hat ihn jemand von außen umbenannt (luna-mcp, Finder), wird neu eingelesen.
+    private func currentFolder(for id: UUID) throws -> URL {
+        if let folder = entry(for: id)?.folder,
+           FileManager.default.fileExists(atPath: folder.appending(path: Self.transcriptFileName).path) {
+            return folder
         }
-
-        let data = try Self.encoder.encode(transcript)
-        try data.write(to: folder.appending(path: Self.transcriptFileName), options: .atomic)
-
-        let summaryURL = folder.appending(path: Self.summaryFileName)
-        if let summary = transcript.summary {
-            let markdown = "# \(transcript.title) – Zusammenfassung\n\n\(summary.markdown)\n"
-            try markdown.write(to: summaryURL, atomically: true, encoding: .utf8)
-        } else if fm.fileExists(atPath: summaryURL.path) {
-            try fm.removeItem(at: summaryURL)
-        }
+        reload()
+        guard let folder = entry(for: id)?.folder else { throw StoreError.notFound }
         return folder
     }
 
     private func readEntries(in parent: URL, unsaved: Bool) -> [Entry] {
-        Self.meetingFolders(in: parent).compactMap { folder in
-            do {
-                return Self.entry(for: try Self.readTranscript(in: folder), folder: folder, unsaved: unsaved)
-            } catch {
-                Log.meeting.error("unreadable meeting \(folder.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                return nil
-            }
+        MeetingLibrary.scan(parent, unsaved: unsaved) { folder, error in
+            Log.meeting.error("unreadable meeting \(folder.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
+        .map { Self.entry(for: $0.transcript, folder: $0.folder, unsaved: unsaved) }
     }
 
     private func fullText(of entry: Entry) -> String {
         if let cached = searchIndex[entry.id] { return cached }
-        let text = (try? Self.readTranscript(in: entry.folder)).map(Self.searchText(of:)) ?? ""
+        let text = (try? MeetingLibrary.readTranscript(in: entry.folder)).map(Self.searchText(of:)) ?? ""
         searchIndex[entry.id] = text
         return text
     }
 
     private func moveUnsavedIntoLibrary() {
-        for folder in Self.meetingFolders(in: AppPaths.unsavedMeetings) {
+        for folder in MeetingLibrary.meetingFolders(in: AppPaths.unsavedMeetings) {
             do {
-                try FileManager.default.moveItem(at: folder, to: Self.uniqueURL(in: libraryFolder, name: folder.lastPathComponent))
+                try FileManager.default.moveItem(at: folder, to: MeetingLibrary.uniqueURL(in: libraryFolder, name: folder.lastPathComponent))
                 Log.meeting.notice("rescued meeting moved into library: \(folder.lastPathComponent, privacy: .public)")
             } catch {
                 Log.meeting.error("could not move rescued meeting: \(error.localizedDescription, privacy: .public)")
@@ -221,14 +249,12 @@ final class MeetingStore: ObservableObject {
         let legacy = files.filter { $0.pathExtension == "txt" && $0.lastPathComponent.hasPrefix("Meeting ") }
         guard !legacy.isEmpty else { return }
 
-        let alreadyImported = Set(Self.meetingFolders(in: libraryFolder).compactMap {
-            (try? Self.readTranscript(in: $0))?.importedFrom
-        })
+        let alreadyImported = Set(MeetingLibrary.scan(libraryFolder).compactMap(\.transcript.importedFrom))
         for file in legacy where !alreadyImported.contains(file.lastPathComponent) {
             guard let text = try? String(contentsOf: file, encoding: .utf8),
                   let transcript = LegacyMeetingImporter.parse(text, fileName: file.lastPathComponent) else { continue }
             do {
-                _ = try write(transcript, into: libraryFolder, existing: nil)
+                try MeetingLibrary.write(transcript, into: libraryFolder, existing: nil)
                 Log.meeting.notice("imported legacy backup \(file.lastPathComponent, privacy: .public)")
             } catch {
                 Log.meeting.error("legacy import failed: \(error.localizedDescription, privacy: .public)")
@@ -236,54 +262,37 @@ final class MeetingStore: ObservableObject {
         }
     }
 
+    /// Beobachtet das Aktivitätsprotokoll von luna-mcp. Alle zwei Sekunden reicht: Claude ändert selten,
+    /// und der Blick auf Änderungszeit und Größe einer Datei kostet praktisch nichts.
+    private func watchActivityLog() {
+        Timer.publish(every: 2, on: .main, in: .common)
+            .autoconnect()
+            .compactMap { [activityLog] _ in
+                (try? activityLog.url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            }
+            .removeDuplicates()
+            .sink { [weak self] _ in self?.applyExternalChanges() }
+            .store(in: &cancellables)
+    }
+
+    private func applyExternalChanges() {
+        let changes = activityLog.entries(limit: 200).filter { $0.isChange && $0.date > lastActivity }
+        guard let newest = changes.first?.date else { return }
+        lastActivity = newest
+        reload()
+        let ids = Set(changes.flatMap(\.meetingIDs))
+        Log.meeting.notice("external changes by Claude: \(ids.count) meeting(s)")
+        externalChanges.send(ids)
+    }
+
     private static func entry(for t: MeetingTranscript, folder: URL, unsaved: Bool) -> Entry {
         Entry(id: t.id, title: t.title, date: t.date, durationSeconds: t.durationSeconds,
-              speakerCount: t.speakerIDs.count, hasSummary: t.summary != nil, folder: folder, isUnsaved: unsaved)
+              speakerCount: t.speakerIDs.count, hasSummary: t.summary != nil, isConfidential: t.confidential,
+              folder: folder, isUnsaved: unsaved)
     }
 
     private static func searchText(of t: MeetingTranscript) -> String {
         ([t.title, t.summary?.markdown ?? ""] + t.speakerNames.values + t.turns.map(\.text))
             .joined(separator: "\n").lowercased()
     }
-
-    private static func readTranscript(in folder: URL) throws -> MeetingTranscript {
-        let data = try Data(contentsOf: folder.appending(path: transcriptFileName))
-        return try decoder.decode(MeetingTranscript.self, from: data)
-    }
-
-    private static func meetingFolders(in parent: URL) -> [URL] {
-        let fm = FileManager.default
-        guard let items = try? fm.contentsOfDirectory(at: parent, includingPropertiesForKeys: [.isDirectoryKey],
-                                                       options: [.skipsHiddenFiles]) else { return [] }
-        return items.filter { fm.fileExists(atPath: $0.appending(path: transcriptFileName).path) }
-    }
-
-    /// „2026-09-25 14-03 Planung Q4 · a1b2c3“ – Datum zuerst, damit der Finder chronologisch sortiert.
-    private static func folderName(for t: MeetingTranscript) -> String {
-        let shortID = t.id.uuidString.prefix(6).lowercased()
-        return "\(MeetingTranscript.Formatters.fileDate.string(from: t.date)) \(FileNames.sanitized(t.title)) · \(shortID)"
-    }
-
-    private static func uniqueURL(in folder: URL, name: String) -> URL {
-        var candidate = folder.appending(path: name, directoryHint: .isDirectory)
-        var n = 2
-        while FileManager.default.fileExists(atPath: candidate.path) {
-            candidate = folder.appending(path: "\(name) (\(n))", directoryHint: .isDirectory)
-            n += 1
-        }
-        return candidate
-    }
-
-    private static let encoder: JSONEncoder = {
-        let e = JSONEncoder()
-        e.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        e.dateEncodingStrategy = .iso8601
-        return e
-    }()
-
-    private static let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
-        return d
-    }()
 }

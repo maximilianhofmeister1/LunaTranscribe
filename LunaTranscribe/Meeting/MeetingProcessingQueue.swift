@@ -1,20 +1,6 @@
 import Combine
 import Foundation
-
-/// Ein beendetes Meeting, das auf seine Verarbeitung wartet. Liegt als `job.json` neben der Aufnahme
-/// in `AppPaths.meetingQueue/<id>/` und übersteht damit einen Neustart der App.
-struct MeetingJob: Codable, Identifiable, Equatable {
-    var id = UUID()
-    let recordedAt: Date
-    let durationSeconds: TimeInterval
-    /// Beim Beenden festgelegt, damit spätere Einstellungsänderungen den Auftrag nicht verändern.
-    let language: AppLanguage
-    let expectedSpeakers: Int?
-    /// Fehler des letzten Versuchs; solche Aufträge warten auf „Erneut versuchen“ oder „Verwerfen“.
-    var failure: String?
-
-    var title: String { MeetingTranscript.defaultTitle(for: recordedAt) }
-}
+import LunaCore
 
 /// Verarbeitet beendete Meetings im Hintergrund, eines nach dem anderen: Sprecher erkennen,
 /// transkribieren, in der Bibliothek ablegen. Die Aufnahme ist dadurch sofort wieder frei für das

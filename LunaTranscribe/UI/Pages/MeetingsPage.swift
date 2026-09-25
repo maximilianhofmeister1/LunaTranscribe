@@ -1,3 +1,4 @@
+import LunaCore
 import SwiftUI
 
 /// Meeting-Bibliothek: Liste (Suche, nach Monat gruppiert) links, gewähltes Meeting rechts.
@@ -192,6 +193,9 @@ struct MeetingRow: View {
                     Chip(text: "Fasst zusammen…", systemImage: "cloud", tint: LunaColor.lavender)
                 } else if entry.hasSummary {
                     Chip(text: "Zusammenfassung", systemImage: "sparkles", tint: LunaColor.lavender)
+                }
+                if entry.isConfidential {
+                    Chip(text: "Vertraulich", systemImage: "lock.fill", tint: LunaColor.inkMuted)
                 }
                 if entry.isUnsaved {
                     Chip(text: "Nur in der App gesichert", systemImage: "exclamationmark.triangle", tint: LunaColor.honey)

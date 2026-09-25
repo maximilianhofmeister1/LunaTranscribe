@@ -1,3 +1,4 @@
+import LunaCore
 import SwiftUI
 
 /// Popover der Menüleiste: Status, Diktat, Meeting, letzte Diktate, Zugang zum Hauptfenster.

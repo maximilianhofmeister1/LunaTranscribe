@@ -1,3 +1,4 @@
+import LunaCore
 import SwiftUI
 
 /// Eigenes Wörterbuch: gelernte Vorschläge oben, Einträge darunter.

@@ -23,6 +23,8 @@ final class AppState: ObservableObject {
     let summarizer: MeetingSummarizer
     /// Lernendes Wörterbuch: Vorschläge aus Korrekturen.
     let learner: VocabularyLearner
+    /// Suchindex für luna-mcp (Claude): Stichworte und inhaltliche Suche.
+    let searchIndexer: SearchIndexer
     /// Navigation des Hauptfensters (Seite, gewähltes Meeting, Einstellungs-Bereich).
     let router = MainRouter()
 
@@ -41,6 +43,7 @@ final class AppState: ObservableObject {
         meeting = MeetingSession(settings: settings, queue: meetingQueue)
         summarizer = MeetingSummarizer(settings: settings, store: meetingStore)
         learner = VocabularyLearner(settings: settings)
+        searchIndexer = SearchIndexer(settings: settings, store: meetingStore, queue: meetingQueue)
 
         forwardChanges(of: models)
         forwardChanges(of: refiners)
@@ -49,6 +52,7 @@ final class AppState: ObservableObject {
         forwardChanges(of: meetingQueue)
         forwardChanges(of: meetingStore)
         forwardChanges(of: summarizer)
+        forwardChanges(of: searchIndexer)
         forwardChanges(of: settings)
         bindModels(preload: preloadModels)
         bindVocabulary()

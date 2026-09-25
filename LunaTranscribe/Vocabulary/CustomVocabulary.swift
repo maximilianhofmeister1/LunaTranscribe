@@ -1,14 +1,5 @@
 import Foundation
-
-/// Ein Eintrag im eigenen Wörterbuch: die richtige Schreibweise und die Varianten,
-/// als die das ASR-Modell den Begriff falsch erkennt.
-struct VocabularyEntry: Codable, Identifiable, Equatable, Sendable {
-    var id = UUID()
-    /// Richtige Schreibweise, landet so im Text („LunaTranscribe“).
-    var term: String
-    /// Bekannte Fehlerkennungen („Luna Transcribe“, „Luna transkribe“).
-    var aliases: [String] = []
-}
+import LunaCore
 
 /// Das aktive Wörterbuch, so wie es eine Engine anwendet. Unveränderlich und threadsicher:
 /// Der Regex wird einmal beim Erzeugen gebaut, `correct` läuft auch auf Hintergrund-Tasks (Meeting).

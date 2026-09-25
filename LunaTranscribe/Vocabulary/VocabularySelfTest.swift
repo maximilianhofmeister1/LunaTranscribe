@@ -1,5 +1,6 @@
 import Foundation
 import FluidAudio
+import LunaCore
 
 /// Entwickler-Einstieg, um das eigene Wörterbuch reproduzierbar an Audiodateien zu prüfen –
 /// ohne Mikrofon, deshalb auch direkt aus dem Terminal startbar:

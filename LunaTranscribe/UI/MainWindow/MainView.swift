@@ -1,3 +1,4 @@
+import LunaCore
 import SwiftUI
 
 /// Wurzel des Hauptfensters: Seitenleiste + aktuelle Seite.

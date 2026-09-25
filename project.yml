@@ -17,6 +17,9 @@ packages:
   MLXSwiftExamples:
     url: https://github.com/ml-explore/mlx-swift-examples.git
     from: "2.29.1"
+  # Gemeinsamer Kern von App und luna-mcp (Datenmodell, Bibliothek, Suchindex, MCP-Server). Testbar mit `swift test`.
+  LunaCore:
+    path: Packages/LunaCore
 
 targets:
   LunaTranscribe:
@@ -68,11 +71,53 @@ targets:
         product: MLXLLM
       - package: MLXSwiftExamples
         product: MLXLMCommon
+      # Embedding-Modell für die inhaltliche Suche (Search/MLXTextEmbedder, auch in luna-mcp).
+      - package: MLXSwiftExamples
+        product: MLXEmbedders
+      - package: LunaCore
+        product: LunaCore
+      # MCP-Server für Claude: liegt als eigenes Programm in Contents/MacOS/luna-mcp.
+      - target: luna-mcp
+        embed: true
+        codeSign: true
+        copy:
+          destination: executables
       # Wird nicht gelinkt, nur eingebettet + signiert; perl lädt es zur Laufzeit.
       - framework: Vendor/MediaRemoteAdapter/MediaRemoteAdapter.framework
         embed: true
         link: false
         codeSign: true
+
+  # MCP-Server (stdio) für Claude Code / Claude Desktop. Startet ohne die App; liest die Meeting-Bibliothek,
+  # den Suchindex und die Einstellungen der App. Siehe docs/MCP-Server-Plan.md.
+  luna-mcp:
+    type: tool
+    platform: macOS
+    sources:
+      - path: LunaMCP
+      # Dasselbe Embedding-Modell wie die App (Anfragen müssen im selben Vektorraum liegen wie der Index).
+      - path: LunaTranscribe/Search/MLXTextEmbedder.swift
+    configFiles:
+      Debug: Config/Signing.xcconfig
+      Release: Config/Signing.xcconfig
+    settings:
+      base:
+        PRODUCT_NAME: luna-mcp
+        PRODUCT_BUNDLE_IDENTIFIER: com.maximhofmeister.LunaTranscribe.mcp
+        SWIFT_VERSION: "5.0"
+        SWIFT_STRICT_CONCURRENCY: minimal
+        ENABLE_HARDENED_RUNTIME: true
+        ENABLE_USER_SCRIPT_SANDBOXING: false
+        GENERATE_INFOPLIST_FILE: true
+        CREATE_INFOPLIST_SECTION_IN_BINARY: true
+        SKIP_INSTALL: true
+    dependencies:
+      - package: LunaCore
+        product: LunaCore
+      - package: LunaCore
+        product: LunaMCPServer
+      - package: MLXSwiftExamples
+        product: MLXEmbedders
 
 schemes:
   LunaTranscribe:

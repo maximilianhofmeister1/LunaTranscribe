@@ -1,25 +1,5 @@
 import Foundation
-
-enum EngineKind: String, CaseIterable, Identifiable {
-    case parakeet   // Standard: ~0,2 s Latenz
-    case cohere     // Beste Qualität, aber festes 35-s-Encoder-Fenster → ~2,5 s Latenz
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .cohere: return "Cohere Transcribe (beste Qualität, ~2,5 s pro Diktat, ~2,5 GB RAM)"
-        case .parakeet: return "Parakeet TDT v3 (empfohlen – ~0,2 s pro Diktat, ~1 GB RAM)"
-        }
-    }
-
-    var shortLabel: String {
-        switch self {
-        case .cohere: return "Cohere Transcribe"
-        case .parakeet: return "Parakeet v3"
-        }
-    }
-}
+import LunaCore
 
 /// Gemeinsame Schnittstelle. Später kann hier z. B. eine MLX-Engine ergänzt werden,
 /// ohne dass sich UI oder Aufnahme-Logik ändern.

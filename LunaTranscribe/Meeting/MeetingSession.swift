@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import LunaCore
 import os
 
 /// Aufnahme des Meeting-Modus. Läuft unabhängig vom Diktat (`AppState`): eigener Recorder, eigene

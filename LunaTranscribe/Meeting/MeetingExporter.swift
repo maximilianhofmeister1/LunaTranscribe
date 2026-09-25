@@ -1,4 +1,5 @@
 import AppKit
+import LunaCore
 import UniformTypeIdentifiers
 
 /// Export eines Meetings als TXT oder Markdown über den „Sichern“-Dialog. Gespeichert wird ein
