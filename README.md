@@ -5,6 +5,7 @@ Läuft komplett offline auf Apple Silicon (CoreML / Neural Engine) mit **Cohere 
 Dazu ein **Meeting-Modus**: Gespräch aufnehmen (Mikrofon + Systemaudio), danach Sprecher erkennen und als Text/Markdown exportieren.
 Und ein dritter Hotkey mit **Nachbearbeitung**: Ein lokales Sprachmodell (LFM2, Qwen3 oder Apple Intelligence) bereinigt
 das Diktat – Rechtschreibung, Grammatik, Füllwörter, Wiederholungen, Versprecher – bevor es eingefügt wird.
+Ein **eigenes Wörterbuch** sorgt dafür, dass Namen und Fachbegriffe richtig geschrieben werden.
 
 ## Voraussetzungen
 
@@ -108,6 +109,47 @@ Gerätesprache nicht übereinstimmen** (z. B. Siri Englisch, Gerät Deutsch) –
 stellen. Seit macOS 15.4 ist Apple Intelligence auch in der EU verfügbar. Die Einstellungen zeigen den konkreten Grund.
 Apples Inhaltsfilter können in seltenen Fällen einen Text ablehnen – dann greift das Sicherheitsnetz.
 
+## Eigenes Wörterbuch
+
+Einstellungen → **Wörterbuch**: Begriffe, die das Modell regelmäßig falsch schreibt, mit der richtigen Schreibweise
+eintragen – optional mit den Varianten, als die sie erkannt werden („LunaTranscribe“ ← „Luna Transcribe, Luna transkribe“).
+Gilt für **Diktat und Meeting**, nach der Nachbearbeitung wird es erneut angewendet (das Sprachmodell kann einen Begriff
+also nicht „zurückkorrigieren“). Der Schalter „Eigenes Wörterbuch verwenden“ schaltet alles ab; die Einträge bleiben erhalten.
+
+Zwei Stufen, beide aus derselben Liste:
+
+1. **Varianten ersetzen** (jede Engine, jede Sprache): Jede eingetragene Variante und der Begriff in falscher
+   Groß-/Kleinschreibung werden durch die richtige Schreibweise ersetzt – nur an Wortgrenzen, unabhängig von
+   Groß-/Kleinschreibung und Leerzeichen. Deterministisch, kostet nichts.
+2. **Akustisches Boosting** (nur Parakeet): FluidAudios CTC-Vocabulary-Boosting lässt ein zweites, kleines Modell
+   (Parakeet CTC 110M, einmaliger Download ~100 MB) über das Audio laufen und ersetzt ein erkanntes Wort nur, wenn das
+   Audio stärker nach dem Wörterbuch-Begriff klingt. Findet so auch Fehlschreibungen, die nicht als Variante eingetragen sind
+   („Weglap“, „WegLab“ → „weclapp“). Kostet ~0,15 s pro Diktat.
+
+Selbsttest (Release-Build, M3, Sprachausgabe „Anna“/„Samantha“, sechs Sätze, sechs Begriffe):
+
+| Satz (gesprochen) | ohne Wörterbuch | mit Wörterbuch |
+|---|---|---|
+| „… heute LunaTranscribe mit FluidAudio getestet …“ | Luna Transkribe, Fluid Audio | LunaTranscribe, FluidAudio |
+| „… das Grafana Dashboard in Weclapp.“ | WegLab. | weclapp. |
+| „… den Export aus Weclapp schicken …“ | Weglap | weclapp |
+| „Das Wetter ist heute schön …“, „Der Graf kam nach Hause, wir klappen …“ | unverändert | unverändert (keine Fehltreffer) |
+
+Hinweise: Das CTC-Modell ist auf **Englisch** trainiert – es wirkt am besten bei Namen, Marken und Fachbegriffen ab
+vier Buchstaben, auch in deutschen Sätzen. Für normale deutsche Wörter lieber Varianten eintragen. FluidAudios
+„Spotter-Rescue“ (Vorschläge allein aus dem Audio, ohne Ähnlichkeit zum erkannten Wort) ist bewusst **aus**: Im
+Selbsttest machte er aus „Das Wetter ist heute schön“ „weclapp weclapp“. Das CTC-Modell liegt – anders als die übrigen
+Modelle – unter `~/Library/Application Support/FluidAudio/Models`, weil FluidAudio seinen Tokenizer nur dort sucht.
+
+Wörterbuch ohne Mikrofon testen – transkribiert jede Datei ohne Wörterbuch, nur mit Boosting und mit beiden Stufen:
+
+```bash
+say -v Anna -o /tmp/luna.wav --data-format=LEF32@16000 "Ich teste LunaTranscribe mit Kubernetes"
+/Applications/LunaTranscribe.app/Contents/MacOS/LunaTranscribe --vocab-selftest /tmp/luna.wav --terms "LunaTranscribe=Luna Transcribe;Kubernetes" --language de
+```
+
+Ohne `--terms` nimmt der Test das Wörterbuch aus den Einstellungen.
+
 ## Meeting-Modus
 
 Menüleiste → **Meeting starten**. Während des Meetings wird nur aufgenommen (16 kHz mono in eine
@@ -148,7 +190,8 @@ keinem Gerätewechsel.
   und wird danach gelöscht – außer „Aufnahme behalten“ ist aktiv, dann wandert die WAV in den Ablageordner.
   Transkript-Backups (`.txt`) liegen im Ablageordner.
 - Der Rohtext eines Diktats mit Nachbearbeitung geht nur in das lokale Sprachmodell auf diesem Mac.
-- Keine Cloud, keine Analytics. Einzige Netzwerkverbindung: der einmalige Modell-Download (ASR + Sprecher-Modelle + Sprachmodell).
+- Keine Cloud, keine Analytics. Einzige Netzwerkverbindung: der einmalige Modell-Download (ASR + Sprecher-Modelle + Sprachmodell + Wörterbuch-Zusatzmodell).
+- Das Wörterbuch liegt in den App-Einstellungen (UserDefaults), nicht in der Cloud.
 - „Letzte Diktate“ im Menü leben nur im Arbeitsspeicher (abschaltbar).
 
 ## Struktur
@@ -167,6 +210,7 @@ LunaTranscribe/
               MLXRefiner (LFM2/Qwen3 via MLX), AppleIntelligenceRefiner (Foundation Models), RefinerManager, RefineSelfTest
   Settings/   SettingsStore, AppLanguage, SettingsView
   UI/         MenuBarView, OverlayController (schwebende Statusanzeige), MeetingResultView (+ Fenster-Controller)
+  Vocabulary/ CustomVocabulary (Einträge + Varianten-Ersetzung), VocabularySelfTest
 Vendor/MediaRemoteAdapter/   Framework + Perl-Skript für Now-Playing-Zugriff (macOS ≥ 15.4), neu bauen: scripts/build-mediaremote-adapter.sh
 ```
 

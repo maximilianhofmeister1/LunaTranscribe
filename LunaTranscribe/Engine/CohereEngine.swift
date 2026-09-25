@@ -1,6 +1,7 @@
 import Foundation
 import CoreML
 import FluidAudio
+import Synchronization
 
 /// Cohere Transcribe (2B) via CoreML – INT8-Encoder + ANE-Decoder aus FluidAudio.
 final class CohereEngine: TranscriptionEngine {
@@ -8,6 +9,8 @@ final class CohereEngine: TranscriptionEngine {
 
     private var models: CoherePipeline.LoadedModels?
     private let pipeline = CoherePipeline()
+    /// Wird vom Main Actor gesetzt und (im Meeting) von Hintergrund-Tasks gelesen.
+    private let vocabulary = Mutex(CustomVocabulary.disabled)
 
     var isLoaded: Bool { models != nil }
 
@@ -60,7 +63,14 @@ final class CohereEngine: TranscriptionEngine {
         // transcribeLong reicht kurze Aufnahmen (≤ 35 s) direkt durch und
         // schneidet längere in überlappende Fenster.
         let result = try await pipeline.transcribeLong(audio: samples, models: models, language: lang)
-        return result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return vocabulary.withLock { $0 }.correct(text)
+    }
+
+    /// Cohere hat keinen CTC-Kopf und liefert keine Zeitstempel – nur die Schreibweisen-Korrektur.
+    func configureVocabulary(_ vocabulary: CustomVocabulary) async throws -> Bool {
+        self.vocabulary.withLock { $0 = vocabulary }
+        return false
     }
 
     func unload() {

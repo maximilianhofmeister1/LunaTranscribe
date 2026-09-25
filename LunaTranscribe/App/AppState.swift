@@ -91,6 +91,20 @@ final class AppState: ObservableObject {
             .removeDuplicates()
             .sink { [weak self] kind in self?.refiners.ensureLoaded(kind) }
             .store(in: &cancellables)
+        // Wörterbuch an die Engine geben – verzögert, damit nicht jeder Tastendruck in den
+        // Einstellungen eine neue Boosting-Session baut. Der erste Wert kommt sofort.
+        models.updateVocabulary(settings.activeVocabulary)
+        settings.$vocabularyEnabled.combineLatest(settings.$vocabularyEntries)
+            .dropFirst()
+            .debounce(for: .milliseconds(600), scheduler: RunLoop.main)
+            .sink { [weak self] enabled, entries in
+                self?.models.updateVocabulary(enabled ? CustomVocabulary(entries: entries) : .disabled)
+            }
+            .store(in: &cancellables)
+        // Menü und Einstellungen zeigen Lade- und Wörterbuch-Status des ModelManagers.
+        models.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
         // Menü und Einstellungen beobachten nur AppState – Ladefortschritt des Sprachmodells durchreichen.
         refiners.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
@@ -269,6 +283,8 @@ final class AppState: ObservableObject {
                 if request.refine {
                     status = .refining
                     (text, fallbackNotice) = await refine(rawText, language: request.language)
+                    // Das Sprachmodell darf Wörterbuch-Begriffe nicht „zurückkorrigieren“.
+                    text = models.vocabulary.correct(text)
                     timingLog.notice("refined +\(Int(Date().timeIntervalSince(t0) * 1000), privacy: .public)ms")
                     guard generation == transcriptionGeneration else { return }
                 }

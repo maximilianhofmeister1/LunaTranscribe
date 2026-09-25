@@ -93,6 +93,9 @@ enum MeetingSelfTest {
         let engine = ParakeetEngine()
         print("Engine wird geladen…")
         try await engine.prepare { _ in }
+        // Wie im echten Meeting: Wörterbuch aus den Einstellungen anwenden.
+        let boosted = try await engine.configureVocabulary(SettingsStore.shared.activeVocabulary)
+        print("Wörterbuch: \(SettingsStore.shared.activeVocabulary.entries.count) Begriffe, Boosting \(boosted ? "an" : "aus")")
 
         let transcriber = MeetingTranscriber(diarizer: SpeakerDiarizer(), engine: engine)
         let lastStep = StepTracker()

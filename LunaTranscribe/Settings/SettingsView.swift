@@ -66,6 +66,23 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
 
+            Section("Wörterbuch") {
+                Toggle("Eigenes Wörterbuch verwenden (Diktat und Meeting)", isOn: $settings.vocabularyEnabled)
+                if settings.vocabularyEnabled {
+                    vocabularyStatus
+                    ForEach($settings.vocabularyEntries) { $entry in
+                        VocabularyEntryRow(entry: $entry) {
+                            settings.vocabularyEntries.removeAll { $0.id == entry.id }
+                        }
+                    }
+                    Button("Begriff hinzufügen") {
+                        settings.vocabularyEntries.append(VocabularyEntry(term: ""))
+                    }
+                }
+                Text("Links die richtige Schreibweise, rechts – durch Kommas getrennt – wie das Modell den Begriff falsch erkennt. Diese Varianten werden immer ersetzt, unabhängig von Engine und Sprache. Mit Parakeet prüft zusätzlich ein kleines Zusatzmodell (Parakeet CTC 110M, einmalig ~100 MB) am Audio, ob ein Begriff gesagt wurde, und findet so auch unbekannte Fehlschreibungen. Das Zusatzmodell ist auf Englisch trainiert und wirkt am besten bei Namen und Fachbegriffen ab vier Buchstaben.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             Section("Nachbearbeitung") {
                 Picker("Sprachmodell", selection: $settings.refinerKind) {
                     ForEach(RefinerKind.allCases) { kind in
@@ -186,6 +203,28 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
+    private var vocabularyStatus: some View {
+        switch state.models.vocabularyState {
+        case .off:
+            Text(settings.vocabularyEntries.isEmpty ? "Noch keine Begriffe" : "Wird aktiv, sobald das Modell geladen ist")
+                .font(.caption).foregroundStyle(.secondary)
+        case .loading:
+            HStack {
+                ProgressView().controlSize(.small)
+                Text("Wörterbuch wird übernommen (beim ersten Mal lädt das Zusatzmodell)…").font(.caption)
+            }
+        case .ready(let terms, let boosted):
+            Label("\(terms) \(terms == 1 ? "Begriff" : "Begriffe") aktiv – " + (boosted ? "mit akustischem Boosting" : "nur Schreibweisen (Boosting nur mit Parakeet)"),
+                  systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+        case .failed(let message):
+            Label("Boosting nicht verfügbar, Schreibweisen werden trotzdem korrigiert: \(message)",
+                  systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+        }
+    }
+
+    @ViewBuilder
     private var modelStatus: some View {
         switch state.models.state {
         case .loading(let p):
@@ -203,5 +242,31 @@ struct SettingsView: View {
         case .idle:
             Text("Kein Modell geladen")
         }
+    }
+}
+
+/// Eine Zeile im Wörterbuch: Begriff und Fehlerkennungen als kommagetrennter Text.
+private struct VocabularyEntryRow: View {
+    @Binding var entry: VocabularyEntry
+    let onDelete: () -> Void
+
+    /// Eigener Textzustand, damit ein gerade getipptes „, “ nicht sofort wieder weggeparst wird.
+    @State private var aliasText = ""
+
+    var body: some View {
+        HStack {
+            TextField("Begriff", text: $entry.term, prompt: Text("Richtige Schreibweise"))
+                .labelsHidden()
+                .frame(maxWidth: 180)
+            TextField("Varianten", text: $aliasText, prompt: Text("Falsch erkannt als …"))
+                .labelsHidden()
+                .onChange(of: aliasText) { _, text in
+                    entry.aliases = text.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+                }
+            Button(action: onDelete) { Image(systemName: "minus.circle") }
+                .buttonStyle(.borderless)
+                .help("Begriff entfernen")
+        }
+        .onAppear { aliasText = entry.aliases.joined(separator: ", ") }
     }
 }

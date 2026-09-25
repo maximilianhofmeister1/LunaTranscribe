@@ -31,8 +31,14 @@ protocol TranscriptionEngine: AnyObject {
     /// `progress` liegt zwischen 0 und 1 (0–0.9 Download, 0.9–0.95 Laden, 0.95–1 Warm-up).
     func prepare(progress: @escaping @Sendable (Double) -> Void) async throws
 
-    /// 16 kHz, mono, Float32. Gibt den erkannten Text zurück (getrimmt).
+    /// 16 kHz, mono, Float32. Gibt den erkannten Text zurück (getrimmt, Wörterbuch angewendet).
     func transcribe(_ samples: [Float], language: AppLanguage) async throws -> String
+
+    /// Setzt das eigene Wörterbuch für alle folgenden Transkriptionen. Die Schreibweisen-Korrektur
+    /// gilt sofort; Engines mit akustischem Boosting laden dafür ggf. ein Zusatzmodell und werfen,
+    /// wenn das scheitert – die Korrektur bleibt dann trotzdem aktiv.
+    /// - Returns: `true`, wenn akustisches Boosting aktiv ist.
+    func configureVocabulary(_ vocabulary: CustomVocabulary) async throws -> Bool
 
     func unload()
 }

@@ -5,9 +5,10 @@ struct LunaTranscribeApp: App {
     @StateObject private var state: AppState
 
     init() {
-        // Entwickler-Selbsttests (siehe MeetingSelfTest / RefineSelfTest); beenden den Prozess selbst.
+        // Entwickler-Selbsttests (siehe MeetingSelfTest / RefineSelfTest / VocabularySelfTest); beenden den Prozess selbst.
         // Läuft einer, lädt AppState keine Modelle vor – sonst konkurrieren zwei Downloads um dieselbe Datei.
         let selfTestRunning = MeetingSelfTest.runIfRequested() || RefineSelfTest.runIfRequested()
+            || VocabularySelfTest.runIfRequested()
         _state = StateObject(wrappedValue: AppState(preloadModels: !selfTestRunning))
     }
 

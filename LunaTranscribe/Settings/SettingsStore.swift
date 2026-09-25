@@ -55,6 +55,18 @@ final class SettingsStore: ObservableObject {
     var isRefinePromptDefault: Bool { refinePrompt == RefinePrompt.defaultTemplate }
     func resetRefinePrompt() { refinePrompt = RefinePrompt.defaultTemplate }
 
+    // Eigenes Wörterbuch
+    /// Hauptschalter: Wörterbuch für Diktat und Meeting anwenden.
+    @Published var vocabularyEnabled: Bool { didSet { d.set(vocabularyEnabled, forKey: "vocabularyEnabled") } }
+    /// Einträge als JSON; bleiben erhalten, wenn der Schalter aus ist.
+    @Published var vocabularyEntries: [VocabularyEntry] {
+        didSet { d.set(try? JSONEncoder().encode(vocabularyEntries), forKey: "vocabularyEntries") }
+    }
+    /// Was die Engines tatsächlich anwenden: leer, wenn der Schalter aus ist.
+    var activeVocabulary: CustomVocabulary {
+        vocabularyEnabled ? CustomVocabulary(entries: vocabularyEntries) : .disabled
+    }
+
     /// Autostart bei der Anmeldung über SMAppService (macOS 13+). Der Zustand lebt im System,
     /// nicht in UserDefaults – deshalb wird er hier gelesen und beim Setzen direkt registriert.
     @Published var launchAtLogin: Bool {
@@ -86,6 +98,9 @@ final class SettingsStore: ObservableObject {
         meetingSpeakerCount = d.integer(forKey: "meetingSpeakerCount")
         refinerKind = RefinerKind(rawValue: d.string(forKey: "refinerKind") ?? "") ?? .lfm2_1_2b
         refinePrompt = d.string(forKey: "refinePrompt") ?? RefinePrompt.defaultTemplate
+        vocabularyEnabled = d.object(forKey: "vocabularyEnabled") as? Bool ?? true
+        vocabularyEntries = d.data(forKey: "vocabularyEntries")
+            .flatMap { try? JSONDecoder().decode([VocabularyEntry].self, from: $0) } ?? []
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
 
