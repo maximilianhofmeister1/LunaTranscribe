@@ -310,6 +310,7 @@ LunaTranscribe/
   Vocabulary/ CustomVocabulary, CorrectionLearner (Wort-Diff), VocabularyLearner (Vorschläge), Self-Tests
   Resources/  Fonts (Fraunces, Figtree – OFL), Assets.xcassets (App-Icon, Akzentfarbe)
 Config/       Signing.xcconfig (+ lokale Local.xcconfig mit Team-ID)
+landing/      Landingpage (statisches HTML/CSS/JS, ohne Build – siehe landing/README.md)
 scripts/      build-release.sh, make-icon.swift (zeichnet das App-Icon), build-mediaremote-adapter.sh
 Vendor/MediaRemoteAdapter/   Framework + Perl-Skript für Now-Playing-Zugriff (macOS ≥ 15.4)
 ```
