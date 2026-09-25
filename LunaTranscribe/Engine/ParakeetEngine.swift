@@ -3,8 +3,6 @@ import FluidAudio
 import Synchronization
 import os
 
-private let vocabularyLog = Logger(subsystem: "com.maximhofmeister.LunaTranscribe", category: "vocabulary")
-
 /// NVIDIA Parakeet TDT 0.6B v3 via CoreML (FluidAudio). Klein und sehr schnell, 25 Sprachen.
 ///
 /// Eigenes Wörterbuch in zwei Stufen: FluidAudios CTC-Vocabulary-Boosting prüft mit einem zweiten,
@@ -24,7 +22,7 @@ final class ParakeetEngine: TranscriptionEngine {
     var isLoaded: Bool { manager != nil }
 
     private var modelDir: URL {
-        ModelPaths.base.appendingPathComponent(Repo.parakeetV3.folderName, isDirectory: true)
+        AppPaths.models.appendingPathComponent(Repo.parakeetV3.folderName, isDirectory: true)
     }
 
     func prepare(progress: @escaping @Sendable (Double) -> Void) async throws {
@@ -72,7 +70,7 @@ final class ParakeetEngine: TranscriptionEngine {
         }
 
         // Einmaliger Download (~100 MB). FluidAudio sucht den Tokenizer des CTC-Modells fest in
-        // seinem eigenen Cache-Ordner, deshalb liegt das Modell nicht unter `ModelPaths.base`.
+        // seinem eigenen Cache-Ordner, deshalb liegt das Modell nicht unter `AppPaths.models`.
         let models: CtcModels
         if let ctcModels {
             models = ctcModels
@@ -86,7 +84,7 @@ final class ParakeetEngine: TranscriptionEngine {
         })
         let session = try await VocabularyBoostingSession(vocabulary: context, ctcModels: models, config: Self.rescorerConfig)
         boosting.withLock { $0 = session }
-        vocabularyLog.notice("Boosting aktiv mit \(context.terms.count) Begriffen")
+        Log.vocabulary.notice("Boosting aktiv mit \(context.terms.count) Begriffen")
         return true
     }
 
@@ -103,7 +101,7 @@ final class ParakeetEngine: TranscriptionEngine {
         let entries: [VocabularyEntry] = replacements.compactMap { replacement in
             guard replacement.shouldReplace, let term = replacement.replacementWord else { return nil }
             let original = replacement.originalWord.trimmingCharacters(in: .punctuationCharacters.union(.whitespaces))
-            vocabularyLog.debug("Boosting: \(original) → \(term)")
+            Log.vocabulary.debug("Boosting: \(original) → \(term)")
             return VocabularyEntry(term: term, aliases: [original])
         }
         return CustomVocabulary(entries: entries).correct(text)

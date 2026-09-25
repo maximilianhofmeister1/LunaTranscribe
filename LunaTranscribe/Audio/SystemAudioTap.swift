@@ -2,8 +2,6 @@ import Foundation
 import CoreAudio
 import os
 
-private let log = Logger(subsystem: "com.maximhofmeister.LunaTranscribe", category: "systemaudio")
-
 enum SystemAudioTapError: LocalizedError {
     case noMicrophone
     case noOutputDevice
@@ -94,7 +92,7 @@ final class SystemAudioTap {
         // wenn der Tap nicht eingehängt wurde (z. B. Berechtigung fehlt).
         let totalChannels = AudioDevices.inputChannelCount(of: aggregate)
         let tapChannels = tapFormatChannels()
-        log.notice("tap+aggregate ready: mic=\(mic.name, privacy: .public) micChannels=\(micChannels) tapChannels=\(tapChannels) aggregateInputChannels=\(totalChannels)")
+        Log.systemAudio.notice("tap+aggregate ready: mic=\(mic.name, privacy: .public) micChannels=\(micChannels) tapChannels=\(tapChannels) aggregateInputChannels=\(totalChannels)")
 
         let micGroup = Array(0..<micChannels)
         let tapGroup = Array(micChannels..<max(micChannels, totalChannels))

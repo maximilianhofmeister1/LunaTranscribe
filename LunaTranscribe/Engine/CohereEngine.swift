@@ -16,7 +16,7 @@ final class CohereEngine: TranscriptionEngine {
 
     /// FluidAudio legt die Dateien unter <base>/<repo.folderName> ab, also .../cohere-transcribe/q8
     private var modelDir: URL {
-        ModelPaths.base.appendingPathComponent(Repo.cohereTranscribeCoreml.folderName, isDirectory: true)
+        AppPaths.models.appendingPathComponent(Repo.cohereTranscribeCoreml.folderName, isDirectory: true)
     }
 
     private var filesPresent: Bool {
@@ -31,7 +31,7 @@ final class CohereEngine: TranscriptionEngine {
 
         if !filesPresent {
             // Einzige Netzwerkverbindung der App: einmaliger Modell-Download von Hugging Face.
-            try await ModelHub.download(.cohereTranscribeCoreml, to: ModelPaths.base) { p in
+            try await ModelHub.download(.cohereTranscribeCoreml, to: AppPaths.models) { p in
                 progress(p.fractionCompleted * 0.9)
             }
         }

@@ -5,7 +5,15 @@ Läuft komplett offline auf Apple Silicon (CoreML / Neural Engine) mit **Cohere 
 Dazu ein **Meeting-Modus**: Gespräch aufnehmen (Mikrofon + Systemaudio), danach Sprecher erkennen und als Text/Markdown exportieren.
 Und ein dritter Hotkey mit **Nachbearbeitung**: Ein lokales Sprachmodell (LFM2, Qwen3 oder Apple Intelligence) bereinigt
 das Diktat – Rechtschreibung, Grammatik, Füllwörter, Wiederholungen, Versprecher – bevor es eingefügt wird.
-Ein **eigenes Wörterbuch** sorgt dafür, dass Namen und Fachbegriffe richtig geschrieben werden.
+Ein **eigenes Wörterbuch** sorgt dafür, dass Namen und Fachbegriffe richtig geschrieben werden – und **lernt aus
+deinen Korrekturen**. Meetings landen als JSON in einer **Meeting-Bibliothek** in einem frei wählbaren Ordner und lassen
+sich auf Knopfdruck über die **Claude CLI zusammenfassen** (die einzige, freiwillige Ausnahme vom Local-First-Prinzip).
+
+Alles lebt in der Menüleiste; ein **Hauptfenster** (Übersicht, Meetings, Wörterbuch, Verlauf, Einstellungen) öffnest du
+über das Menüleisten-Icon. Design „Mondnacht“: warm und verspielt, Schriften Fraunces + Figtree, Hell- und Dunkelmodus.
+
+**Open Source (MIT), kostenlos.** Einen ausführlichen Vergleich mit Wispr Flow und die Local-First-Architektur beschreibt
+[docs/Vergleich-LunaTranscribe-vs-WisprFlow.md](docs/Vergleich-LunaTranscribe-vs-WisprFlow.md).
 
 ## Voraussetzungen
 
@@ -18,9 +26,10 @@ Ein **eigenes Wörterbuch** sorgt dafür, dass Namen und Fachbegriffe richtig ge
 
 1. `xcodegen generate` (nur nötig, wenn `LunaTranscribe.xcodeproj` fehlt oder `project.yml` geändert wurde)
 2. `LunaTranscribe.xcodeproj` in Xcode öffnen
-3. Target **LunaTranscribe → Signing & Capabilities → Team** auswählen.
-   Ein kostenloses Apple-ID-„Personal Team“ reicht. Wichtig, damit die Signatur stabil bleibt –
-   sonst fragt macOS nach jedem Build erneut nach den Berechtigungen.
+3. **Signatur (empfohlen):** `cp Config/Local.xcconfig.example Config/Local.xcconfig` und dort deine Team-ID
+   eintragen (`security find-identity -v -p codesigning` zeigt sie). Ein kostenloses Apple-ID-„Personal Team“ reicht.
+   Die Datei ist gitignored. Ohne sie wird ad-hoc signiert – das baut, aber macOS fragt dann nach jedem Build
+   erneut nach Mikrofon, Bedienungshilfen und Systemaudio.
 4. ⌘R
 
 ## Release-Build & Installation (für den Alltag)
@@ -29,7 +38,7 @@ Ein **eigenes Wörterbuch** sorgt dafür, dass Namen und Fachbegriffe richtig ge
 ./scripts/build-release.sh
 ```
 
-Baut Release, signiert mit dem im `project.yml` hinterlegten Apple-Development-Team, installiert nach
+Baut Release, signiert mit dem Team aus `Config/Local.xcconfig`, installiert nach
 `/Applications/LunaTranscribe.app` und startet die App. Weil die Signatur stabil ist, behält macOS die
 Mikrofon- und Bedienungshilfen-Berechtigungen über Updates hinweg.
 
@@ -66,14 +75,19 @@ den eigenen Mac. Erst für die Weitergabe an andere bräuchte es Developer ID + 
 - **Abbrechen**: Escape oder das X im Overlay – verwirft Aufnahme bzw. laufende Transkription.
 - **Wiedergabe pausieren**: Läuft Musik/Video (Music, Spotify, Browser …), wird sie beim Aufnahmestart
   pausiert und nach dem Stopp fortgesetzt – nur, wenn die App sie selbst pausiert hat.
-  Abschaltbar unter Einstellungen → Audio. Technik: `Vendor/MediaRemoteAdapter` (BSD-3), siehe dortige README.
-- Zweiter Hotkey mit eigener Sprache: Einstellungen → Tastenkürzel.
+  Abschaltbar unter Einstellungen → Diktat → Audio. Technik: `Vendor/MediaRemoteAdapter` (BSD-3), siehe dortige README.
+- Zweiter Hotkey mit eigener Sprache: Einstellungen → Diktat.
+- **Hauptfenster**: Menüleiste → „Öffnen“ (oder das Zahnrad für die Einstellungen). Seiten: Übersicht (heutige Wörter,
+  Modellstatus, Tastenkürzel, letzte Meetings), Meetings, Wörterbuch, Verlauf, Einstellungen. Das Fenster ist frei
+  skalierbar und merkt sich Größe und Position. Kein Dock-Icon – die App bleibt eine Menüleisten-App.
+- **Overlay**: eine Pille in Nachtblau am unteren Bildschirmrand – „Ich höre zu…“ mit lebendiger Wellenform,
+  „Transkribiere…“, „Formuliere…“; sie nimmt nie den Fokus.
 
 ## Diktat mit Nachbearbeitung
 
-Dritter Hotkey (Einstellungen → Tastenkürzel → „Diktieren + Nachbearbeitung“, kein Default): gleiches Diktat in der
+Dritter Hotkey (Einstellungen → Diktat → „Diktieren + Nachbearbeitung“, kein Default): gleiches Diktat in der
 Hauptsprache, aber vor dem Einfügen bereinigt ein lokales Sprachmodell den Text – wie die Kernfunktion von Superwhisper.
-Das Overlay zeigt „Aufnahme… → Transkribiere… → Formuliere…“.
+Das Overlay zeigt „Ich höre zu… → Transkribiere… → Formuliere…“.
 
 Was das Modell tut: Rechtschreibung, Grammatik, Zeichensetzung; Füllwörter („äh“, „halt“, „sozusagen“), Stotterer,
 Wortwiederholungen und Selbstkorrekturen raus. Was es **nicht** tut: umformulieren, kürzen, ergänzen, übersetzen,
@@ -111,7 +125,7 @@ Apples Inhaltsfilter können in seltenen Fällen einen Text ablehnen – dann gr
 
 ## Eigenes Wörterbuch
 
-Einstellungen → **Wörterbuch**: Begriffe, die das Modell regelmäßig falsch schreibt, mit der richtigen Schreibweise
+Hauptfenster → **Wörterbuch**: Begriffe, die das Modell regelmäßig falsch schreibt, mit der richtigen Schreibweise
 eintragen – optional mit den Varianten, als die sie erkannt werden („LunaTranscribe“ ← „Luna Transcribe, Luna transkribe“).
 Gilt für **Diktat und Meeting**, nach der Nachbearbeitung wird es erneut angewendet (das Sprachmodell kann einen Begriff
 also nicht „zurückkorrigieren“). Der Schalter „Eigenes Wörterbuch verwenden“ schaltet alles ab; die Einträge bleiben erhalten.
@@ -150,6 +164,24 @@ say -v Anna -o /tmp/luna.wav --data-format=LEF32@16000 "Ich teste LunaTranscribe
 
 Ohne `--terms` nimmt der Test das Wörterbuch aus den Einstellungen.
 
+### Lernendes Wörterbuch
+
+Korrigierst du ein Wort im **Verlauf** (Stift-Knopf) oder in einem **Meeting-Transkript**, vergleicht LunaTranscribe
+vorher und nachher Wort für Wort und schlägt passende Einträge vor („Weglap“ → „weclapp“). Die Vorschläge erscheinen
+oben auf der Seite **Wörterbuch** (mit Zähler in der Seitenleiste): **Übernehmen** (neuer Begriff oder zusätzliche
+Variante eines bestehenden), Begriff vorher anpassen, oder **Ignorieren** (kommt nicht wieder). Nichts wird
+automatisch aktiv – eine falsche Ersetzung wäre in jedem künftigen Diktat, eine fehlende nur ein Tippfehler.
+
+Als Verhörer zählt eine Ersetzung von 1–3 Wörtern, deren Schreibweise oder Klang ähnlich ist. Verworfen werden
+Umformulierungen (weniger als die Hälfte der Wörter blieb gleich, oder zu unähnlich), getauschte Funktionswörter
+(„die“ → „der“), Großschreibung am Satzanfang, reine Zeichensetzung und Beugungen normaler Wörter („klappen“ →
+„klappten“). Großschreibung mitten im Satz gilt dagegen als Marke („Iphone“ → „iPhone“).
+
+```bash
+/Applications/LunaTranscribe.app/Contents/MacOS/LunaTranscribe --learn-selftest                       # eingebaute Fälle
+/Applications/LunaTranscribe.app/Contents/MacOS/LunaTranscribe --learn-selftest "vorher" "nachher"    # eigener Fall
+```
+
 ## Meeting-Modus
 
 Menüleiste → **Meeting starten**. Während des Meetings wird nur aufgenommen (16 kHz mono in eine
@@ -161,14 +193,12 @@ ausschließlich über das Menü beendet oder verworfen.
 
 1. Sprecher-Erkennung (Diarization) mit FluidAudios Offline-Pipeline (pyannote community-1, CoreML).
 2. Zusammenhängende Redebeiträge (Turns) werden gebildet und einzeln mit der gewählten Engine transkribiert.
-3. Das **Ergebnisfenster** öffnet sich: Sprecher umbenennen („Sprecher 1“ → Name), Beiträge lesen,
-   **Als Text / Als Markdown sichern…** oder kopieren. Ein Backup als `.txt` liegt bereits im Ablageordner
-   (Standard `~/Documents/LunaTranscribe Meetings`, änderbar unter Einstellungen → Meeting).
+3. Das Meeting wird in der **Meeting-Bibliothek** gespeichert und das Hauptfenster öffnet sich darauf.
 
 Richtwerte: 1 h Meeting ≈ 1–2 min Verarbeitung mit Parakeet, ≈ 5 min mit Cohere. Beim allerersten Mal
 kommt die einmalige Kompilierung der Sprecher-Modelle dazu.
 
-**Systemaudio** (Einstellungen → Meeting, Standard an): Für Online-Meetings wird die Wiedergabe von Zoom, Teams,
+**Systemaudio** (Einstellungen → Meetings, Standard an): Für Online-Meetings wird die Wiedergabe von Zoom, Teams,
 Browser usw. per Core-Audio-Prozess-Tap mitgeschnitten und mit dem Mikrofon zu einem privaten Aggregate-Device
 kombiniert (Core Audio übernimmt die Synchronisation). Kopfhörer empfohlen – sonst nimmt das Mikrofon die
 Lautsprecher zusätzlich auf. Wird die Berechtigung verweigert, liefert macOS stille Systemaudio-Spuren ohne
@@ -183,36 +213,106 @@ Aufteilung auf genau diese Zahl. Praktisch: Mikrofon zwischen die Personen legen
 Grenzen: Mikrofon und Ausgabegerät werden beim Meeting-Start festgelegt und folgen während der Aufnahme
 keinem Gerätewechsel.
 
+### Meeting-Bibliothek
+
+Jedes Meeting ist ein Ordner im **Meeting-Ordner** (Standard `~/Documents/LunaTranscribe Meetings`, frei wählbar unter
+Einstellungen → Meetings):
+
+```
+2026-09-25 14-03 Planung Q4 · a1b2c3/
+  meeting.json   Transkript, Sprecher, Titel, Zusammenfassung (Quelle der Wahrheit, versioniert)
+  summary.md     Zusammenfassung als Markdown – sobald vorhanden
+  audio.wav      nur mit „Aufnahme behalten“
+```
+
+Die Seite **Meetings** zeigt die Bibliothek nach Monaten gruppiert, mit Volltextsuche. Im Meeting: Titel umbenennen,
+Sprecher benennen, einzelne Beiträge korrigieren (speist das lernende Wörterbuch) – alles wird automatisch gespeichert.
+**TXT/Markdown gibt es nur noch als Export** (mit oder ohne Zusammenfassung), dazu Kopieren, „Im Finder zeigen“ und
+Löschen (Papierkorb).
+
+- **Ordner wechseln**: Die App fragt, ob vorhandene Meetings mitziehen sollen.
+- **Ordner nicht erreichbar** (externes Laufwerk ab): Neue Meetings landen vorübergehend in
+  `~/Library/Application Support/LunaTranscribe/Unsaved` und ziehen beim nächsten Einlesen automatisch um – ein
+  Transkript geht nie verloren.
+- **Alte TXT-Backups** aus Version 0.1 („Meeting 2026-09-15 14-03.txt“) werden beim Start einmalig importiert;
+  die Originale bleiben unangetastet.
+
+### Zusammenfassung mit Claude
+
+Im Meeting auf **Zusammenfassen** klicken: LunaTranscribe ruft die lokal installierte **Claude CLI** auf
+(`claude -p`, ohne Werkzeuge, ohne MCP, ohne Projektkontext, ohne gespeicherte Sitzung) und legt Kurzfassung,
+Themen, Entscheidungen, Aufgaben und offene Fragen im Tab „Zusammenfassung“ und als `summary.md` ab. Dauer je nach
+Länge 10–60 s.
+
+- **Voraussetzung**: Claude CLI installiert und angemeldet (`curl -fsSL https://claude.ai/install.sh | bash`, dann
+  einmal `claude` starten). Die App sucht sie in `~/.local/bin`, Homebrew und der Login-Shell; ein eigener Pfad und
+  ein Modell (z. B. `sonnet`) lassen sich unter Einstellungen → Meetings setzen, „Testen“ prüft Pfad und Version.
+- **Anweisung**: Einstellungen → Meetings → „Anweisung für die Zusammenfassung“, frei editierbar (`{language}` = Sprache
+  des Meetings), „Auf Standard zurücksetzen“ stellt die mitgelieferte Fassung wieder her.
+- **Local-First bleibt ehrlich**: Die Transkription ist lokal. Für die Zusammenfassung geht der Text des Meetings über
+  dein Claude-Konto an Anthropic. Beim ersten Mal erklärt ein Hinweis das; der Button trägt ein Wolken-Symbol.
+
+Ohne App testen (gleicher Code wie der Button; Achtung, der Text geht an Anthropic):
+
+```bash
+/Applications/LunaTranscribe.app/Contents/MacOS/LunaTranscribe --summary-selftest "<Meeting-Ordner>/meeting.json" [--model sonnet] [--cli /pfad/zu/claude]
+```
+
+### Meetings im Terminal mit Claude
+
+Weil die Bibliothek aus normalen Ordnern mit JSON und Markdown besteht, kann Claude Code sie direkt lesen:
+
+```bash
+cd ~/Documents/"LunaTranscribe Meetings" && claude "Fasse alle Meetings dieser Woche zusammen und liste offene Aufgaben je Person"
+```
+
 ## Datenschutz
 
 - Diktat-Audio bleibt nur im RAM (16 kHz mono ≈ 4 MB/min) und wird direkt nach der Transkription verworfen.
 - Meeting-Audio liegt während Aufnahme und Verarbeitung temporär unter `~/Library/Caches/LunaTranscribe/Meetings`
-  und wird danach gelöscht – außer „Aufnahme behalten“ ist aktiv, dann wandert die WAV in den Ablageordner.
-  Transkript-Backups (`.txt`) liegen im Ablageordner.
+  und wird danach gelöscht – außer „Aufnahme behalten“ ist aktiv, dann wandert die WAV in den Meeting-Ordner.
+  Transkripte liegen als `meeting.json` im Meeting-Ordner.
 - Der Rohtext eines Diktats mit Nachbearbeitung geht nur in das lokale Sprachmodell auf diesem Mac.
-- Keine Cloud, keine Analytics. Einzige Netzwerkverbindung: der einmalige Modell-Download (ASR + Sprecher-Modelle + Sprachmodell + Wörterbuch-Zusatzmodell).
-- Das Wörterbuch liegt in den App-Einstellungen (UserDefaults), nicht in der Cloud.
-- „Letzte Diktate“ im Menü leben nur im Arbeitsspeicher (abschaltbar).
+- Keine Analytics, kein Account. Netzwerk nur für den einmaligen Modell-Download (ASR + Sprecher-Modelle + Sprachmodell +
+  Wörterbuch-Zusatzmodell) – und, **nur auf Klick**, für eine Meeting-Zusammenfassung über die Claude CLI (Text an Anthropic).
+- Das Wörterbuch und die gelernten Vorschläge liegen in den App-Einstellungen (UserDefaults), nicht in der Cloud.
+- „Letzte Diktate“ (Verlauf) leben nur im Arbeitsspeicher (abschaltbar unter Einstellungen → Datenschutz).
+- Die Übersicht zählt „Wörter/Diktate heute“ über einen eigenen Tageszähler in den Einstellungen – nur Datum und zwei
+  Zahlen, kein Text. Er zählt auch mit ausgeschaltetem Verlauf und beginnt jeden Tag bei null.
 
 ## Struktur
 
 ```
 LunaTranscribe/
-  App/        LunaTranscribeApp (MenuBarExtra), AppState (Hotkey → Aufnahme → Engine → Einfügen; hält MeetingSession)
-  Audio/      AudioRecorder (AVAudioEngine → 16 kHz Float32, Sink RAM oder WAV-Datei), AudioDevices (CoreAudio),
+  App/        LunaTranscribeApp (MenuBarExtra, Self-Test-Einstieg), AppState (Wurzel: verdrahtet alles),
+              DictationController (Aufnahme → Engine → Refine → Einfügen), Log, AppPaths
+  Audio/      AudioRecorder (16 kHz Float32, Sink RAM oder WAV-Datei), AudioDevices, DeviceInputStream,
               SystemAudioTap (Prozess-Tap + Aggregate-Device für Systemaudio)
   Engine/     TranscriptionEngine-Protokoll, CohereEngine, ParakeetEngine, ModelManager
-  Hotkey/     KeyboardShortcuts-Namen (Default F2)
-  Meeting/    MeetingSession (Statusmaschine), MeetingTranscriber (Diarizer → Turns → Engine),
-              SpeakerDiarizer (FluidAudio Offline-Pipeline), MeetingTranscript (+ txt/md-Export), MeetingExporter
+  Hotkey/     KeyboardShortcuts-Namen (Default F2), EscapeKeyMonitor
+  Meeting/    MeetingSession (Statusmaschine), MeetingTranscriber (Diarizer → Turns → Engine), SpeakerDiarizer,
+              MeetingTranscript (Codable, Export), MeetingStore (Bibliothek), MeetingDocument (geöffnetes Meeting,
+              Autosave), MeetingExporter, LegacyMeetingImporter, MeetingSelfTest
   Output/     TextInjector (Pasteboard + ⌘V), Permissions, MediaPlaybackController (Wiedergabe pausieren)
-  Refine/     TextRefiner-Protokoll + RefinerKind, RefinePrompt (Anweisung, Beispielpaar, Antwort-Bereinigung),
-              MLXRefiner (LFM2/Qwen3 via MLX), AppleIntelligenceRefiner (Foundation Models), RefinerManager, RefineSelfTest
-  Settings/   SettingsStore, AppLanguage, SettingsView
-  UI/         MenuBarView, OverlayController (schwebende Statusanzeige), MeetingResultView (+ Fenster-Controller)
-  Vocabulary/ CustomVocabulary (Einträge + Varianten-Ersetzung), VocabularySelfTest
-Vendor/MediaRemoteAdapter/   Framework + Perl-Skript für Now-Playing-Zugriff (macOS ≥ 15.4), neu bauen: scripts/build-mediaremote-adapter.sh
+  Refine/     TextRefiner-Protokoll + RefinerKind, RefinePrompt, MLXRefiner, AppleIntelligenceRefiner, RefinerManager
+  Summary/    ClaudeCLI (Prozessaufruf), MeetingSummarizer, SummaryPrompt, SummarySelfTest
+  Settings/   SettingsStore, AppLanguage, Pages/ (eine Datei pro Einstellungsbereich)
+  UI/         Theme/ (Farben, Schriften, Bausteine), MainWindow/ (Fenster, Navigation, Seitenleiste), Pages/ (Übersicht,
+              Meetings, Wörterbuch, Verlauf), MenuBarView, OverlayController, UISnapshotSelfTest
+  Vocabulary/ CustomVocabulary, CorrectionLearner (Wort-Diff), VocabularyLearner (Vorschläge), Self-Tests
+  Resources/  Fonts (Fraunces, Figtree – OFL), Assets.xcassets (App-Icon, Akzentfarbe)
+Config/       Signing.xcconfig (+ lokale Local.xcconfig mit Team-ID)
+scripts/      build-release.sh, make-icon.swift (zeichnet das App-Icon), build-mediaremote-adapter.sh
+Vendor/MediaRemoteAdapter/   Framework + Perl-Skript für Now-Playing-Zugriff (macOS ≥ 15.4)
 ```
+
+Design neu rendern, ohne zu klicken (alle Seiten + Popover, hell und dunkel, mit Beispiel-Meeting):
+
+```bash
+/Applications/LunaTranscribe.app/Contents/MacOS/LunaTranscribe --ui-snapshot /tmp/luna-ui
+```
+
+Das App-Icon wird per Code gezeichnet: `swift scripts/make-icon.swift` (Vorschau: `--preview /tmp/icon.png`).
 
 Nachbearbeitung – Designentscheidungen: Zustandslos pro Diktat (kein Chat-Verlauf), greedy, Qwen3 ohne Thinking.
 Der Prompt ist Englisch mit expliziter Ausgabesprache; das Diktat steckt in `<dictation>`-Tags, damit kleine Modelle
@@ -244,3 +344,9 @@ Sprecher-Zuordnung per **Turn-Slicing** (Turn-Audio einzeln durch
 `engine.transcribe`), nicht per Wort-Zeitstempel – so bleibt das Engine-Protokoll unverändert und Cohere
 (liefert keine Zeitstempel) funktioniert genauso wie Parakeet. Mögliche Verfeinerung: Token-Alignment über
 Parakeets `tokenTimings`. Schwellen für das Zusammenfassen stehen oben in `MeetingTranscriber`.
+
+## Lizenz
+
+LunaTranscribe steht unter der [MIT-Lizenz](LICENSE). Mitgelieferte und genutzte Fremdkomponenten (Swift-Pakete,
+Schriften, MediaRemoteAdapter) und die Lizenzen der heruntergeladenen Modelle stehen in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Mitmachen: [CONTRIBUTING.md](CONTRIBUTING.md).

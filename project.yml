@@ -40,6 +40,10 @@ targets:
         NSMicrophoneUsageDescription: "LunaTranscribe nimmt deine Stimme auf, um sie lokal auf diesem Mac in Text umzuwandeln. Es wird nichts hochgeladen."
         NSAudioCaptureUsageDescription: "Im Meeting-Modus nimmt LunaTranscribe zusätzlich die Systemwiedergabe (z. B. Zoom, Teams) auf, um das Gespräch lokal zu transkribieren. Es wird nichts hochgeladen."
         NSHumanReadableCopyright: "© 2026 Maximilian Hofmeister"
+    # Signatur (Team) kommt aus Config/Signing.xcconfig bzw. der lokalen Config/Local.xcconfig.
+    configFiles:
+      Debug: Config/Signing.xcconfig
+      Release: Config/Signing.xcconfig
     entitlements:
       path: LunaTranscribe/LunaTranscribe.entitlements
       properties:
@@ -50,8 +54,6 @@ targets:
         SWIFT_VERSION: "5.0"
         SWIFT_STRICT_CONCURRENCY: minimal
         ENABLE_HARDENED_RUNTIME: true
-        CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: 24HTAN3HMR   # Apple Development: Maximilian Hofmeister – stabile Signatur, Berechtigungen bleiben erhalten
         PRODUCT_NAME: LunaTranscribe
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"

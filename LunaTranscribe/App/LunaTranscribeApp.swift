@@ -5,11 +5,15 @@ struct LunaTranscribeApp: App {
     @StateObject private var state: AppState
 
     init() {
-        // Entwickler-Selbsttests (siehe MeetingSelfTest / RefineSelfTest / VocabularySelfTest); beenden den Prozess selbst.
+        // Entwickler-Selbsttests (Meeting/Refine/Vocabulary/Learn/Summary/UI); beenden den Prozess selbst.
         // Läuft einer, lädt AppState keine Modelle vor – sonst konkurrieren zwei Downloads um dieselbe Datei.
-        let selfTestRunning = MeetingSelfTest.runIfRequested() || RefineSelfTest.runIfRequested()
-            || VocabularySelfTest.runIfRequested()
-        _state = StateObject(wrappedValue: AppState(preloadModels: !selfTestRunning))
+        let selfTestRunning = LearnSelfTest.runIfRequested() || MeetingSelfTest.runIfRequested()
+            || RefineSelfTest.runIfRequested() || VocabularySelfTest.runIfRequested() || SummarySelfTest.runIfRequested()
+            || UISnapshotSelfTest.isRequested
+        LunaFont.registerBundledFonts()
+        let state = AppState(preloadModels: !selfTestRunning)
+        _state = StateObject(wrappedValue: state)
+        UISnapshotSelfTest.run(state: state)
     }
 
     var body: some Scene {
@@ -19,19 +23,15 @@ struct LunaTranscribeApp: App {
             Image(systemName: menuBarSymbol)
         }
         .menuBarExtraStyle(.window)
-
-        Settings {
-            SettingsView().environmentObject(state)
-        }
     }
 
     /// Diktat-Zustände haben Vorrang (kurzlebig); dahinter zeigt das Icon ein laufendes Meeting.
     private var menuBarSymbol: String {
-        switch state.status {
+        switch state.dictation.status {
         case .recording: return "waveform.circle.fill"
         case .transcribing: return "ellipsis.circle"
         case .refining: return "sparkles"
-        default:
+        case .idle, .notice:
             if state.meeting.isRecording { return "record.circle" }
             if state.meeting.isProcessing { return "ellipsis.circle" }
             if case .loading = state.models.state { return "arrow.down.circle.dotted" }

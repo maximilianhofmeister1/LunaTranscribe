@@ -2,8 +2,6 @@ import Foundation
 import FoundationModels
 import os
 
-private let log = Logger(subsystem: "com.maximhofmeister.LunaTranscribe", category: "refine")
-
 /// Nachbearbeitung mit Apples On-Device-Systemmodell (Foundation Models, macOS 26+).
 /// Kein Download, läuft auf der Neural Engine – setzt aber aktiviertes Apple Intelligence voraus.
 /// Das Framework wird nur schwach gelinkt (`-weak_framework FoundationModels`), damit die App
@@ -24,7 +22,7 @@ final class AppleIntelligenceRefiner: TextRefiner {
         LanguageModelSession(instructions: RefinePrompt.instructions(language: .german, template: RefinePrompt.defaultTemplate)).prewarm()
         isLoaded = true
         progress(1.0)
-        log.notice("Apple Intelligence ready")
+        Log.refine.notice("Apple Intelligence ready")
     }
 
     func refine(_ text: String, language: AppLanguage, promptTemplate: String) async throws -> String {
@@ -46,7 +44,7 @@ final class AppleIntelligenceRefiner: TextRefiner {
         }
 
         guard let cleaned = RefinePrompt.sanitize(raw, original: text) else {
-            log.error("implausible output for \(text.count) chars: \(raw.prefix(120), privacy: .private)")
+            Log.refine.error("implausible output for \(text.count) chars: \(raw.prefix(120), privacy: .private)")
             throw RefinerError.implausibleOutput
         }
         return cleaned

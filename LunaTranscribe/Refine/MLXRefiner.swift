@@ -5,11 +5,9 @@ import MLXLLM
 import MLXLMCommon
 import os
 
-private let log = Logger(subsystem: "com.maximhofmeister.LunaTranscribe", category: "refine")
-
 /// Nachbearbeitung mit einem quantisierten Open-Weights-Modell (Qwen3, LFM2) über MLX.
 /// Rechnet auf der GPU (Metal, Unified Memory) – nicht auf der Neural Engine, die nur CoreML erreicht.
-/// Die Gewichte kommen einmalig von Hugging Face und liegen wie die ASR-Modelle unter `ModelPaths.base`.
+/// Die Gewichte kommen einmalig von Hugging Face und liegen wie die ASR-Modelle unter `AppPaths.models`.
 final class MLXRefiner: TextRefiner {
     let kind: RefinerKind
 
@@ -36,7 +34,7 @@ final class MLXRefiner: TextRefiner {
         MLX.GPU.set(cacheLimit: 20 * 1024 * 1024)
 
         // Modelle landen unter ~/Library/Application Support/LunaTranscribe/Models/models/<repo>
-        let hub = HubApi(downloadBase: ModelPaths.base)
+        let hub = HubApi(downloadBase: AppPaths.models)
         let loaded = try await LLMModelFactory.shared.loadContainer(
             hub: hub, configuration: ModelConfiguration(id: repo)
         ) { p in
@@ -49,7 +47,7 @@ final class MLXRefiner: TextRefiner {
         // Diktat nicht Sekunden auf die GPU wartet.
         _ = try? await generate(with: loaded, messages: [.system("Repeat the text."), .user("ok")], maxTokens: 4)
         progress(1.0)
-        log.notice("\(self.kind.shortLabel, privacy: .public) loaded")
+        Log.refine.notice("\(self.kind.shortLabel, privacy: .public) loaded")
     }
 
     func refine(_ text: String, language: AppLanguage, promptTemplate: String) async throws -> String {
@@ -60,7 +58,7 @@ final class MLXRefiner: TextRefiner {
             try await generate(with: container, messages: chat, maxTokens: outputBudget(for: text))
         }
         guard let cleaned = RefinePrompt.sanitize(raw, original: text) else {
-            log.error("implausible output for \(text.count) chars: \(raw.prefix(120), privacy: .private)")
+            Log.refine.error("implausible output for \(text.count) chars: \(raw.prefix(120), privacy: .private)")
             throw RefinerError.implausibleOutput
         }
         return cleaned
@@ -106,7 +104,7 @@ final class MLXRefiner: TextRefiner {
                 case .chunk(let chunk):
                     output += chunk
                 case .info(let info):
-                    log.notice("generated \(info.generationTokenCount) tokens at \(info.tokensPerSecond, format: .fixed(precision: 0)) tok/s (prompt \(info.promptTokenCount) tokens)")
+                    Log.refine.notice("generated \(info.generationTokenCount) tokens at \(info.tokensPerSecond, format: .fixed(precision: 0)) tok/s (prompt \(info.promptTokenCount) tokens)")
                 case .toolCall:
                     break
                 }

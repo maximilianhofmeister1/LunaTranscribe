@@ -12,14 +12,14 @@ struct SpeakerSegment {
 /// (Segmentierung + WeSpeaker-Embeddings + VBx-Clustering) als CoreML – komplett lokal.
 /// Die Erkennung ist rein akustisch (Stimm-Embeddings), unabhängig davon, ob eine Stimme über das
 /// Mikrofon oder das Systemaudio kam. Die Modelle sind klein (< 100 MB) und landen wie die
-/// ASR-Modelle unter `ModelPaths.base`.
+/// ASR-Modelle unter `AppPaths.models`.
 final class SpeakerDiarizer {
     private var models: OfflineDiarizerModels?
 
     /// Lädt (beim ersten Mal: lädt herunter und kompiliert) die Modelle. `progress` 0…1.
     func prepare(progress: @escaping @Sendable (Double) -> Void) async throws {
         if models != nil { return }
-        models = try await OfflineDiarizerModels.load(from: ModelPaths.base) { p in
+        models = try await OfflineDiarizerModels.load(from: AppPaths.models) { p in
             progress(p.fractionCompleted)
         }
         progress(1)

@@ -2,8 +2,6 @@ import Foundation
 import Combine
 import os
 
-private let log = Logger(subsystem: "com.maximhofmeister.LunaTranscribe", category: "meeting")
-
 /// Zustand des Meeting-Modus. Läuft unabhängig vom Diktat (`AppState`): eigener Recorder, eigene
 /// Statusmaschine, kein Overlay. Während des Meetings wird nur aufgenommen – die gesamte
 /// Verarbeitung (Sprecher, Transkription) passiert nach „Meeting beenden“.
@@ -21,13 +19,12 @@ final class MeetingSession: ObservableObject {
     @Published private(set) var elapsed: TimeInterval = 0
     /// Systemaudio wurde für die laufende Aufnahme tatsächlich eingebunden.
     @Published private(set) var systemAudioActive = false
-    /// Letztes fertiges Transkript – wird vom Ergebnisfenster angezeigt und dort umbenannt.
-    @Published var transcript: MeetingTranscript?
-    /// Pfad des automatischen Backups zum aktuellen Transkript.
-    @Published private(set) var backupURL: URL?
+    /// ID des zuletzt fertig verarbeiteten Meetings; das Hauptfenster öffnet es.
+    @Published private(set) var lastFinishedMeetingID: UUID?
 
     private let settings: SettingsStore
     private let models: ModelManager
+    private let store: MeetingStore
     private let recorder = AudioRecorder()
     private let systemAudio = SystemAudioTap()
     /// Bleibt zwischen Meetings geladen (Modelle sind klein), spart die Kompilierung beim nächsten Mal.
@@ -48,9 +45,10 @@ final class MeetingSession: ObservableObject {
         return false
     }
 
-    init(settings: SettingsStore, models: ModelManager) {
+    init(settings: SettingsStore, models: ModelManager, store: MeetingStore) {
         self.settings = settings
         self.models = models
+        self.store = store
         Self.removeOrphanedRecordings()
     }
 
@@ -85,7 +83,7 @@ final class MeetingSession: ObservableObject {
             elapsed = 0
             status = .recording(since: recordingStart!)
             startElapsedTimer()
-            log.notice("meeting recording started, systemAudio=\(self.systemAudioActive)")
+            Log.meeting.notice("meeting recording started, systemAudio=\(self.systemAudioActive)")
         }
     }
 
@@ -96,7 +94,7 @@ final class MeetingSession: ObservableObject {
         stopCapture()
 
         let duration = recorder.recordedSeconds
-        log.notice("meeting stopped after \(duration, format: .fixed(precision: 1)) s (elapsed \(self.elapsed, format: .fixed(precision: 0)) s)")
+        Log.meeting.notice("meeting stopped after \(duration, format: .fixed(precision: 1)) s (elapsed \(self.elapsed, format: .fixed(precision: 0)) s)")
         guard duration >= 1 else {
             fail("Es kam kein Audio an (\(String(format: "%.1f", duration)) s aufgenommen). Mikrofon-/Systemaudio-Berechtigung prüfen.")
             return
@@ -163,7 +161,7 @@ final class MeetingSession: ObservableObject {
             return source
         } catch {
             // Kein harter Fehler: Meeting läuft mit Mikrofon weiter, das Menü zeigt den Hinweis.
-            log.error("system audio unavailable, falling back to microphone: \(error.localizedDescription, privacy: .public)")
+            Log.meeting.error("system audio unavailable, falling back to microphone: \(error.localizedDescription, privacy: .public)")
             return .microphone(uid: settings.inputDeviceUID)
         }
     }
@@ -176,23 +174,21 @@ final class MeetingSession: ObservableObject {
 
     private func finish(with result: MeetingTranscript) {
         processingTask = nil
-        let folder = MeetingExporter.folder(from: settings.meetingExportFolder)
-        backupURL = try? MeetingExporter.writeBackup(result, to: folder)
-
-        if settings.meetingKeepAudio, let url = audioURL {
-            try? MeetingExporter.keepAudio(url, for: result, in: folder)
-        }
+        // Mit „Aufnahme behalten“ zieht die WAV in den Meeting-Ordner, sonst wird sie gelöscht.
+        let keptAudio = settings.meetingKeepAudio ? audioURL : nil
+        if keptAudio != nil { audioURL = nil }
+        let entry = store.add(result, audioURL: keptAudio)
         discardAudio()
-        transcript = result
         status = .idle
-        log.notice("meeting processed: \(result.turns.count) turns, backup=\(self.backupURL?.lastPathComponent ?? "-", privacy: .public)")
+        lastFinishedMeetingID = entry?.id
+        Log.meeting.notice("meeting processed: \(result.turns.count) turns, saved=\(entry?.folder.lastPathComponent ?? "-", privacy: .public)")
     }
 
     private func fail(_ message: String) {
         processingTask = nil
         discardAudio()
         status = .failed(message)
-        log.error("meeting failed: \(message, privacy: .public)")
+        Log.meeting.error("meeting failed: \(message, privacy: .public)")
     }
 
     private func discardAudio() {
@@ -215,10 +211,7 @@ final class MeetingSession: ObservableObject {
         elapsedTimer = nil
     }
 
-    private static var temporaryFolder: URL {
-        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("LunaTranscribe/Meetings", isDirectory: true)
-    }
+    private static var temporaryFolder: URL { AppPaths.meetingRecordings }
 
     /// Temporäre Aufnahme unter ~/Library/Caches – wird nach der Verarbeitung gelöscht.
     private static func temporaryAudioURL() -> URL {

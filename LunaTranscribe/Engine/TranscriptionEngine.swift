@@ -54,13 +54,3 @@ enum EngineError: LocalizedError {
         }
     }
 }
-
-/// Basisordner für alle Modelle: ~/Library/Application Support/LunaTranscribe/Models
-enum ModelPaths {
-    static var base: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return appSupport
-            .appendingPathComponent("LunaTranscribe", isDirectory: true)
-            .appendingPathComponent("Models", isDirectory: true)
-    }
-}

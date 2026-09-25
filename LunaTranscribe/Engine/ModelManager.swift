@@ -42,6 +42,12 @@ final class ModelManager: ObservableObject {
         }
     }
 
+    /// Hinweis im Overlay, wenn ein Diktat mangels Modell nicht starten kann.
+    var noticeText: String {
+        if case .failed(let message) = state { return "Modell konnte nicht geladen werden: \(message)" }
+        return statusText
+    }
+
     private var engine: TranscriptionEngine?
     private var loadTask: Task<Void, Never>?
 
