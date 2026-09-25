@@ -5,15 +5,16 @@ struct LunaTranscribeApp: App {
     @StateObject private var state: AppState
 
     init() {
-        // Entwickler-Selbsttests (Meeting/Refine/Vocabulary/Learn/Summary/UI); beenden den Prozess selbst.
+        // Entwickler-Selbsttests (Meeting/Refine/Vocabulary/Learn/Summary/UI/Queue); beenden den Prozess selbst.
         // Läuft einer, lädt AppState keine Modelle vor – sonst konkurrieren zwei Downloads um dieselbe Datei.
         let selfTestRunning = LearnSelfTest.runIfRequested() || MeetingSelfTest.runIfRequested()
             || RefineSelfTest.runIfRequested() || VocabularySelfTest.runIfRequested() || SummarySelfTest.runIfRequested()
-            || UISnapshotSelfTest.isRequested
+            || UISnapshotSelfTest.isRequested || QueueSelfTest.isRequested
         LunaFont.registerBundledFonts()
         let state = AppState(preloadModels: !selfTestRunning)
         _state = StateObject(wrappedValue: state)
         UISnapshotSelfTest.run(state: state)
+        QueueSelfTest.run(state: state)
     }
 
     var body: some Scene {
@@ -33,7 +34,7 @@ struct LunaTranscribeApp: App {
         case .refining: return "sparkles"
         case .idle, .notice:
             if state.meeting.isRecording { return "record.circle" }
-            if state.meeting.isProcessing { return "ellipsis.circle" }
+            if state.meetingQueue.isProcessing { return "ellipsis.circle" }
             if case .loading = state.models.state { return "arrow.down.circle.dotted" }
             return "waveform"
         }

@@ -79,6 +79,13 @@ private struct Sidebar: View {
                     .font(LunaFont.caption(12, weight: .medium))
                     .foregroundStyle(LunaColor.honey)
             }
+            if state.meetingQueue.pendingCount > 0 {
+                Label(state.meetingQueue.pendingCount == 1 ? "1 Meeting in Verarbeitung"
+                                                           : "\(state.meetingQueue.pendingCount) Meetings in Verarbeitung",
+                      systemImage: "waveform.badge.magnifyingglass")
+                    .font(LunaFont.caption(12, weight: .medium))
+                    .foregroundStyle(LunaColor.lavender)
+            }
             Text("Lokal auf diesem Mac · Open Source")
                 .font(LunaFont.caption(10.5))
                 .foregroundStyle(LunaColor.inkMuted.opacity(0.8))

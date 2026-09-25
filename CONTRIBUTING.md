@@ -48,6 +48,7 @@ Es gibt kein Test-Target. Stattdessen reproduzierbare Entwickler-Selbsttests, di
 | `--vocab-selftest <wav…> --terms …` | Wörterbuch an Audiodateien | keine |
 | `--refine-selftest "<text>"` | Nachbearbeitung (Prompt, Modell, Zeiten) | keine |
 | `--summary-selftest [meeting.json]` | Zusammenfassung über die Claude CLI (sendet Text an Anthropic) | keine |
+| `--queue-selftest <wav…>` | Hintergrund-Verarbeitung mehrerer Meetings | keine |
 | `--ui-snapshot <ordner>` | Rendert alle Seiten hell/dunkel als PNG | keine |
 | `--meeting-selftest <sek> --log <datei>` | Aufnahme Mikrofon + Systemaudio → Transkript | über `open -n … --args` starten |
 

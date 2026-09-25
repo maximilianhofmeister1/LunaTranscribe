@@ -1,3 +1,4 @@
+import AVFoundation
 import AppKit
 import SwiftUI
 
@@ -45,6 +46,9 @@ enum UISnapshotSelfTest {
         state.meetingStore.reload()
         if let entry = state.meetingStore.add(sampleMeeting()) { state.router.selectedMeetingID = entry.id }
         state.dictation.injectSampleHistoryForSnapshots()
+        // Ein wartender Hintergrund-Auftrag (Modelle sind nicht geladen, er bleibt also „wartend“).
+        let queuedID = try enqueueSilentMeeting(state: state)
+        defer { if let queuedID { state.meetingQueue.discard(queuedID) } }
 
         for (name, appearance) in [("hell", NSAppearance.Name.aqua), ("dunkel", .darkAqua)] {
             for page in MainPage.allCases {
@@ -81,6 +85,19 @@ enum UISnapshotSelfTest {
         host.cacheDisplay(in: host.bounds, to: rep)
         try rep.representation(using: .png, properties: [:])?.write(to: url)
         window.orderOut(nil)
+    }
+
+    /// Legt eine Sekunde Stille als beendetes Meeting in die Warteschlange.
+    private static func enqueueSilentMeeting(state: AppState) throws -> UUID? {
+        let url = FileManager.default.temporaryDirectory.appending(path: "luna-ui-silence-\(UUID().uuidString).wav")
+        let format = AVAudioFormat(standardFormatWithSampleRate: 16_000, channels: 1)!
+        let file = try AVAudioFile(forWriting: url, settings: format.settings)
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 16_000)!
+        buffer.frameLength = 16_000
+        try file.write(from: buffer)
+        try state.meetingQueue.enqueue(recording: url, recordedAt: Date(), durationSeconds: 1_834,
+                                       language: .german, expectedSpeakers: nil)
+        return state.meetingQueue.items.last?.id
     }
 
     private static func sampleMeeting() -> MeetingTranscript {
