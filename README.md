@@ -274,10 +274,50 @@ Weil die Bibliothek aus normalen Ordnern mit JSON und Markdown besteht, kann Cla
 cd ~/Documents/"LunaTranscribe Meetings" && claude "Fasse alle Meetings dieser Woche zusammen und liste offene Aufgaben je Person"
 ```
 
-Geplant ist ein eigener, lokal laufender **MCP-Server** (`luna-mcp`), über den auch Claude Desktop die Meetings inhaltlich
-durchsuchen und lesen, Sprecher benennen, Meetings umbenennen und – nur nach deiner Bestätigung – löschen kann; mit
-Freigabe-Schaltern, vertraulichen Meetings und Protokoll. Plan und Stand:
-[docs/MCP-Server-Plan.md](docs/MCP-Server-Plan.md).
+### Meetings in Claude (MCP)
+
+`luna-mcp` ist ein kleiner **MCP-Server**, der in der App steckt (`LunaTranscribe.app/Contents/MacOS/luna-mcp`).
+Claude Code oder Claude Desktop starten ihn auf deinem Mac; er liest die Meeting-Bibliothek direkt aus dem
+Meeting-Ordner – ohne Netzwerk, auch wenn LunaTranscribe gerade nicht läuft. Damit kann Claude:
+
+- **suchen** – nach Stichworten und, wenn eingeschaltet, **inhaltlich** („Wo haben wir über Preiserhöhungen
+  gesprochen?“ findet auch „wir müssen teurer werden“); Treffer mit Zeitmarke und Sprecher,
+- **lesen** – ganze Meetings oder Ausschnitte (nach Sprecher, Zeitraum), lange Meetings seitenweise,
+- **Sprecher benennen** und **Meetings umbenennen** – nur mit Erlaubnis, jede Änderung steht im Protokoll und lässt
+  sich rückgängig machen,
+- **Meetings löschen** – ausschließlich nach deiner Zustimmung in einem **macOS-Dialog**, den Claude weder auslösen
+  noch bestätigen kann; das Meeting wandert in den Papierkorb,
+- dazu Prompts wie Wochenrückblick, Aufgaben je Person, Follow-up-Mail, „Wann wurde X entschieden?“ und
+  „Sprecher benennen“ (schlägt Namen mit Belegstelle vor).
+
+**Einrichten**
+
+1. LunaTranscribe → Einstellungen → Datenschutz → **„Meetings für Claude freigeben“**. Ohne diesen Schalter antwortet
+   luna-mcp nur mit einem Hinweis (doppeltes Opt-in). Darunter optional **„Claude darf Meetings bearbeiten“**.
+2. Claude Code (einmalig im Terminal, „Befehl kopieren“ in den Einstellungen liefert ihn fertig):
+   ```bash
+   claude mcp add --scope user --transport stdio lunatranscribe -- /Applications/LunaTranscribe.app/Contents/MacOS/luna-mcp
+   ```
+   Claude Desktop: „Eintrag kopieren“ und in `~/Library/Application Support/Claude/claude_desktop_config.json` unter
+   `mcpServers` einfügen, Claude Desktop neu starten.
+3. Optional: Einstellungen → Meetings → **„Inhaltliche Suche“** (lädt einmalig Multilingual E5 Small, ~470 MB).
+4. „Verbindung testen“ in den Einstellungen – oder im Terminal:
+   ```bash
+   /Applications/LunaTranscribe.app/Contents/MacOS/luna-mcp --check      # Einrichtung prüfen (nur lesend)
+   /Applications/LunaTranscribe.app/Contents/MacOS/luna-mcp --selftest   # Funktionsprobe mit Beispiel-Meetings
+   ```
+
+**Was an Anthropic geht:** luna-mcp selbst schickt nichts ins Netz. Was Claude über luna-mcp liest (Suchtreffer,
+Transkripte), verarbeitet Claude aber bei Anthropic – wie bei der Zusammenfassung. Beim ersten Einschalten erklärt ein
+Hinweis das. **Vertrauliche Meetings** (Schloss-Knopf im Meeting) sind für Claude unsichtbar, landen nicht im Suchindex
+und werden nicht zusammengefasst. Audio und der Diktat-Verlauf sind nie erreichbar. Das Protokoll „Zuletzt durch Claude“
+in den Einstellungen zeigt jeden Zugriff (nur IDs und Namen, keine Inhalte;
+`~/Library/Application Support/LunaTranscribe/mcp-activity.log`).
+
+**macOS-Hinweis:** Liegt der Meeting-Ordner in `~/Documents`, fragt macOS beim ersten Zugriff, ob *Claude* (bzw. das
+Terminal bei Claude Code) auf „Dokumente“ zugreifen darf – luna-mcp läuft als deren Kindprozess.
+
+Technik und Entscheidungen: [docs/MCP-Server-Plan.md](docs/MCP-Server-Plan.md).
 
 ## Datenschutz
 
@@ -287,7 +327,11 @@ Freigabe-Schaltern, vertraulichen Meetings und Protokoll. Plan und Stand:
   Transkripte liegen als `meeting.json` im Meeting-Ordner.
 - Der Rohtext eines Diktats mit Nachbearbeitung geht nur in das lokale Sprachmodell auf diesem Mac.
 - Keine Analytics, kein Account. Netzwerk nur für den einmaligen Modell-Download (ASR + Sprecher-Modelle + Sprachmodell +
-  Wörterbuch-Zusatzmodell) – und, **nur auf Klick**, für eine Meeting-Zusammenfassung über die Claude CLI (Text an Anthropic).
+  Wörterbuch-Zusatzmodell, optional Embedding-Modell) – und, **nur auf Klick**, für eine Meeting-Zusammenfassung über die
+  Claude CLI (Text an Anthropic).
+- **Claude über luna-mcp** nur mit Freigabe in den Einstellungen; was Claude liest, geht an Anthropic. Der Suchindex
+  (`~/Library/Application Support/LunaTranscribe/Index`) liegt nur auf diesem Mac, enthält keine vertraulichen Meetings
+  und lässt sich jederzeit löschen.
 - Das Wörterbuch und die gelernten Vorschläge liegen in den App-Einstellungen (UserDefaults), nicht in der Cloud.
 - „Letzte Diktate“ (Verlauf) leben nur im Arbeitsspeicher (abschaltbar unter Einstellungen → Datenschutz).
 - Die Übersicht zählt „Wörter/Diktate heute“ über einen eigenen Tageszähler in den Einstellungen – nur Datum und zwei
@@ -298,22 +342,30 @@ Freigabe-Schaltern, vertraulichen Meetings und Protokoll. Plan und Stand:
 ```
 LunaTranscribe/
   App/        LunaTranscribeApp (MenuBarExtra, Self-Test-Einstieg), AppState (Wurzel: verdrahtet alles),
-              DictationController (Aufnahme → Engine → Refine → Einfügen), Log, AppPaths
+              DictationController (Aufnahme → Engine → Refine → Einfügen), Log
   Audio/      AudioRecorder (16 kHz Float32, Sink RAM oder WAV-Datei), AudioDevices, DeviceInputStream,
               SystemAudioTap (Prozess-Tap + Aggregate-Device für Systemaudio)
   Engine/     TranscriptionEngine-Protokoll, CohereEngine, ParakeetEngine, ModelManager
   Hotkey/     KeyboardShortcuts-Namen (Default F2), EscapeKeyMonitor
   Meeting/    MeetingSession (Statusmaschine), MeetingTranscriber (Diarizer → Turns → Engine), SpeakerDiarizer,
-              MeetingTranscript (Codable, Export), MeetingStore (Bibliothek), MeetingDocument (geöffnetes Meeting,
-              Autosave), MeetingExporter, LegacyMeetingImporter, MeetingSelfTest
+              MeetingStore (Bibliothek, übernimmt Änderungen von Claude), MeetingDocument (geöffnetes Meeting,
+              Autosave mit Zusammenführung), MeetingExporter, LegacyMeetingImporter, MeetingSelfTest
   Output/     TextInjector (Pasteboard + ⌘V), Permissions, MediaPlaybackController (Wiedergabe pausieren)
   Refine/     TextRefiner-Protokoll + RefinerKind, RefinePrompt, MLXRefiner, AppleIntelligenceRefiner, RefinerManager
-  Summary/    ClaudeCLI (Prozessaufruf), MeetingSummarizer, SummaryPrompt, SummarySelfTest
+  Search/     SearchIndexer (Suchindex im Hintergrund), MLXTextEmbedder (Embedding-Modell, auch in luna-mcp),
+              ClaudeConnection (Einrichtung, Verbindungstest)
+  Summary/    ClaudeCLI (Prozessaufruf), MeetingSummarizer, SummarySelfTest
   Settings/   SettingsStore, AppLanguage, Pages/ (eine Datei pro Einstellungsbereich)
   UI/         Theme/ (Farben, Schriften, Bausteine), MainWindow/ (Fenster, Navigation, Seitenleiste), Pages/ (Übersicht,
               Meetings, Wörterbuch, Verlauf), MenuBarView, OverlayController, UISnapshotSelfTest
   Vocabulary/ CustomVocabulary, CorrectionLearner (Wort-Diff), VocabularyLearner (Vorschläge), Self-Tests
   Resources/  Fonts (Fraunces, Figtree – OFL), Assets.xcassets (App-Icon, Akzentfarbe)
+LunaMCP/      luna-mcp: main (stdio, --check, --selftest), AppKitConfirmer (Bestätigungsdialog)
+Packages/LunaCore/           Swift-Paket, auch unter Linux testbar (`swift test`):
+  LunaCore       MeetingTranscript & Co., MeetingLibrary (lesen/schreiben/Papierkorb, Revision, Zusammenführen),
+                 SearchIndex (SQLite FTS5 + Vektoren), Chunker, KeywordQuery, HybridRanker (RRF), ActivityLog,
+                 SharedSettings, AppPaths, SummaryPrompt
+  LunaMCPServer  Tools, Ressourcen, Prompts, Suche, Bestätigungs-Bremse, Diagnose (Selbsttest)
 Config/       Signing.xcconfig (+ lokale Local.xcconfig mit Team-ID)
 scripts/      build-release.sh, make-icon.swift (zeichnet das App-Icon), build-mediaremote-adapter.sh
 Vendor/MediaRemoteAdapter/   Framework + Perl-Skript für Now-Playing-Zugriff (macOS ≥ 15.4)

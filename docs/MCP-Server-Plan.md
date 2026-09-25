@@ -1,6 +1,6 @@
 # Plan: MCP-Server für LunaTranscribe („luna-mcp“)
 
-Stand: 25.09.2026 · Status: **Plan, noch nicht umgesetzt** · Bezug: `main` @ `d2a38c5` (v0.2 + Hintergrund-Verarbeitung)
+Stand: 25.09.2026 · Status: **umgesetzt, macOS-Seite noch nicht auf einem Mac gebaut** (siehe §0.1) · Bezug: `main` @ `d2a38c5` (v0.2 + Hintergrund-Verarbeitung)
 
 Ziel: Claude (Claude Code im Terminal, Claude Desktop) soll mit der Meeting-Bibliothek arbeiten können – **inhaltlich
 suchen**, lesen, Zusammenhänge über mehrere Meetings herstellen, **Sprecher benennen, Meetings umbenennen und – nur
@@ -19,7 +19,28 @@ was nicht gesichert ist, ist als **„zu prüfen“** markiert und wird in Phase
 | 25.09.2026 | **Inhaltliche (semantische) Suche gehört zum Umfang**, nicht zu einem späteren Ausbau | Maintainer |
 | 25.09.2026 | **Schreibzugriff:** Sprecher benennen, Meetings umbenennen, Meetings löschen – Löschen **nur nach Bestätigung durch den Nutzer** | Maintainer |
 | 25.09.2026 | Annahme (bitte bestätigen): Die Pflicht-Bestätigung gilt fürs Löschen. Umbenennungen sind umkehrbar und laufen über die normale Tool-Freigabe des Claude-Clients; eine zusätzliche Bestätigung auch dafür ist ein Schalter (Standard aus) | Vorschlag |
-| offen | Freigabe für Claude standardmäßig **aus** (doppeltes Opt-in, §7.1) – Empfehlung, noch nicht bestätigt | – |
+| offen | Freigabe für Claude standardmäßig **aus** (doppeltes Opt-in, §7.1) – so umgesetzt, Bestätigung durch den Maintainer steht aus | – |
+| 25.09.2026 | Umsetzung: statt `NSFileCoordinator`/`NSFilePresenter` atomare Writes + Revision (luna-mcp) + Dreiwege-Zusammenführung beim Speichern (App) + Beobachtung des Aktivitätsprotokolls (§8) | Umsetzung |
+| 25.09.2026 | Umsetzung: Revision = FNV-1a (64 Bit) statt SHA-256 – Merkmal für optimistische Sperre, kein Sicherheitsmerkmal; kein Krypto-Framework nötig, das es unter Linux (Tests) nicht gibt | Umsetzung |
+| 25.09.2026 | Umsetzung: auch ungültige Tool-Eingaben kommen als `isError`-Ergebnis (Empfehlung der Spezifikation 2025-11-25), nur unbekannte Ressourcen/Prompts als JSON-RPC-Fehler | Umsetzung |
+
+### 0.1 Umsetzungsstand
+
+**Gebaut und getestet** (Swift 6.1.3 unter Linux, `swift test` in `Packages/LunaCore`, 44 Tests):
+`LunaCore` (Modell, Bibliothek, Revisionen, Zusammenführen, Aktivitätsprotokoll, Chunking, SQLite-FTS5-Index,
+Vektorsuche, Rangfusion) und `LunaMCPServer` (alle 7 Tools, Ressourcen, Vervollständigung, 6 Prompts, Freigabe-Logik,
+Bestätigungs-Bremse, Diagnose) – End-to-End über den echten SDK-Client, per In-Memory-Transport **und über stdio mit
+Pipes** (inkl. Prüfung, dass stdout nur JSON-RPC enthält). `project.yml` wurde mit XcodeGen (Linux-Build) erfolgreich
+generiert: `luna-mcp` landet per Copy-Files-Phase in `Contents/MacOS` (`CodeSignOnCopy`).
+
+**Geschrieben, aber nicht kompiliert** (kein macOS/Xcode in der Entwicklungsumgebung): alles, was AppKit, SwiftUI oder MLX
+braucht – `LunaMCP/main.swift`, `AppKitConfirmer`, `Search/MLXTextEmbedder.swift`, `SearchIndexer`, `ClaudeConnection`,
+die Anpassungen an `MeetingStore`, `MeetingDocument`, `MeetingSummarizer`, Einstellungen und Meeting-Ansicht sowie
+`import LunaCore` in 31 App-Dateien. **Erster Schritt auf dem Mac:** `xcodegen generate`, Debug-Build, dann
+`luna-mcp --selftest`, `--ui-snapshot`, `--queue-selftest`.
+
+**Noch offen:** Eval-Set und `--search-selftest` (Recall@5/MRR) samt Vergleich mit `Qwen3-Embedding-0.6B`; `.mcpb`-Paket;
+Tokenizer-Vergleich `unicode61` vs. `trigram`; die übrigen „zu prüfen“-Punkte unten (Stand je Punkt vermerkt).
 
 ---
 
@@ -80,7 +101,7 @@ funktioniert das. Ein MCP-Server liefert darüber hinaus:
 | Thema | Stand | Folge für den Plan |
 |---|---|---|
 | MCP-Spezifikation | Aktuell **2026-07-28**: zustandsloser Kern (kein `initialize`-Handshake mehr, Version/Capabilities pro Request in `_meta`), `server/discover`, Multi-Round-Trip-Requests statt vom Server ausgelöster Anfragen, cachebare Listen (`ttlMs`), Extensions (MCP Apps, Tasks); Roots, Sampling und Logging veraltet. Vorversion **2025-11-25** bleibt laut Ankündigung mindestens 12 Monate unterstützt. | Wir bauen auf dem, was das Swift-SDK spricht (2025-11-25), und nutzen **keine** veralteten oder im Umbau befindlichen Features (kein Sampling, keine Roots, kein MCP-Logging, **keine Elicitation** – siehe §7.3). Der Umstieg auf 2026-07-28 bleibt damit rein SDK-seitig. |
-| Swift-SDK | `modelcontextprotocol/swift-sdk`, implementiert **2025-11-25**, Release-Linie 0.11/0.12 (genaue aktuelle Version: **zu prüfen**), Swift 6.0+, macOS 13+, Transports: stdio, HTTP, In-Memory. Lizenz MIT/Apache-2.0. **Nicht** unter den Tier-1-SDKs für 2026-07-28 (TypeScript, Python, Go, C#). | Größtes Protokoll-Risiko (§13), abgefedert durch schmale Protokollnutzung. |
+| Swift-SDK | `modelcontextprotocol/swift-sdk`, implementiert **2025-11-25**, Release **0.12.1** (geprüft 25.09.2026; verlangt swift-tools-version 6.1, also Xcode 16.3+), Swift 6.0+, macOS 13+, Transports: stdio, HTTP, In-Memory. Lizenz MIT/Apache-2.0. **Nicht** unter den Tier-1-SDKs für 2026-07-28 (TypeScript, Python, Go, C#). | Größtes Protokoll-Risiko (§13), abgefedert durch schmale Protokollnutzung. |
 | Embeddings in Swift | Die im Projekt gepinnte `mlx-swift-examples` **2.29.1** enthält das Produkt `MLXEmbedders` mit u. a. `multilingual_e5_small`, `bge_m3` und `qwen3_embedding` (`mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ`); Pooling (mean/cls/last …) und Normalisierung eingebaut. Nachfolger-Repo ist `mlx-swift-lm` 3.x. | Keine neue Abhängigkeit – nur ein weiteres Produkt aus einem bereits genutzten Paket. |
 | Claude Code | `claude mcp add --scope user --transport stdio <name> -- <befehl>`; Ressourcen per `@`, Prompts als Slash-Befehle; Tool-Ergebnisse: Warnung ab 10 000, Standardlimit 25 000 Token, pro Tool per `_meta["anthropic/maxResultSizeChars"]` anhebbar; Tool Search lädt Tools bei Bedarf. | Große Meetings seitenweise; Tool-Beschreibungen so schreiben, dass Tool Search sie findet. |
 | Claude Desktop | Lokale Server per `claude_desktop_config.json` oder als **MCP Bundle (`.mcpb`)**, Manifest 0.3, Servertyp `binary`, `user_config` mit Typ `directory`. | `.mcpb` als Komfort-Installation in Phase 5. |
@@ -115,7 +136,7 @@ LunaTranscribe.app/Contents/MacOS/luna-mcp        (Target „luna-mcp“, Swift 
         │  LunaEmbedding – TextEmbedder über MLXEmbedders (nur Anfrage-Vektoren + Nachindexieren)
         │  AppKit    – nur für den Bestätigungsdialog beim Löschen
         │
-        ├── liest/schreibt  <Meeting-Ordner>/*/meeting.json      (NSFileCoordinator)
+        ├── liest/schreibt  <Meeting-Ordner>/*/meeting.json      (atomar, mit Revision)
         ├── liest/schreibt  ~/Library/Application Support/LunaTranscribe/Index/search.sqlite  (WAL)
         ├── liest           ~/Library/Application Support/LunaTranscribe/Queue/*/job.json
         ├── liest           ~/Library/Application Support/LunaTranscribe/Models/…   (Embedding-Modell, lädt nie)
@@ -135,7 +156,7 @@ Packages/LunaCore/                     swift-tools-version 6.0, macOS 15
                 FluidAudio-Zuordnung), EngineKind (ohne Engine-Protokoll), VocabularyEntry
     Library/    LibraryLocation (Ordnerauflösung, heute AppPaths.meetingFolder), MeetingLibrary (lesen, Coder,
                 Ordnernamen – heute private in MeetingStore), MeetingLibraryWriter (atomar schreiben, umbenennen,
-                in Papierkorb; NSFileCoordinator), Revision (SHA-256)
+                in Papierkorb), Revision (FNV-1a)
     Search/     Chunker, SearchIndex (SQLite: FTS5 + Vektoren), HybridRanker (RRF), QueryExpansion (Wörterbuch-Aliase),
                 TextEmbedder (Protokoll)
     Render/     MeetingRenderer (Markdown/Text – ersetzt MeetingTranscript.render(as:)), SummaryPrompt.defaultTemplate
@@ -186,7 +207,7 @@ Die Zeitzone kommt zur Laufzeit aus `TimeZone.current`.
 - Primärschlüssel ist die **UUID** aus `meeting.json`. Sie bleibt bei Umbenennungen stabil; der Ordnername nicht.
 - Wo eine ID erwartet wird, reicht ein **eindeutiges Präfix ab 6 Zeichen** – genau die 6 Zeichen im Ordnernamen
   („… · a1b2c3“), die der Nutzer im Finder sieht. Mehrdeutige Präfixe → Fehler mit Kandidatenliste.
-- Jede Ausgabe, die ein Meeting beschreibt, trägt eine **`revision`** (erste 12 Hex-Zeichen des SHA-256 der
+- Jede Ausgabe, die ein Meeting beschreibt, trägt eine **`revision`** (FNV-1a, 64 Bit, über die Bytes der
   `meeting.json`). Schreib-Tools verlangen sie (optimistische Sperre, §8).
 - Es werden **nie Pfade** angenommen oder ausgegeben.
 
@@ -289,7 +310,7 @@ _Gekürzt bei 40 000 Zeichen. Fortsetzung: get_meeting(id: "a1b2c3", offset: 119
 
 Fachliche Fehler (unbekannte ID, Revision veraltet, Freigabe aus, Löschen abgelehnt) kommen als Tool-Ergebnis mit
 `isError: true` und einem Satz, der den nächsten Schritt nennt („Kein Meeting mit der ID ‚abc123‘. Nutze
-`search_meetings`.“). JSON-RPC-Fehler (`-32602`) nur für formal ungültige Parameter. Ein abgelehntes Löschen ist
+`search_meetings`.“). Auch formal ungültige Eingaben kommen als `isError`-Ergebnis (so empfiehlt es die Spezifikation 2025-11-25); JSON-RPC-Fehler nur für unbekannte Ressourcen (`-32002`) und Prompts (`-32602`). Ein abgelehntes Löschen ist
 **kein** Fehler, den Claude umgehen soll: Die Meldung sagt ausdrücklich „Der Nutzer hat das Löschen abgelehnt. Nicht
 erneut versuchen, außer der Nutzer bittet darum.“
 
@@ -321,7 +342,7 @@ ein Schreiber zur Zeit, sicher über Prozessgrenzen), `busy_timeout` gesetzt:
 
 | Tabelle | Inhalt |
 |---|---|
-| `meetings` | `id`, `content_hash` (SHA-256 der Turns + Titel + Zusammenfassung), `indexed_at`, `embedding_model` |
+| `meetings` | `id`, `content_hash` (FNV-1a über Chunker-Version und alle Abschnitte – ohne Titel und Namen), `indexed_at`, `embedding_model` |
 | `chunks` | `id`, `meeting_id`, `kind` (title/summary/turns), `turn_from`, `turn_to`, `start`, `end`, `speaker_ids`, `text` |
 | `chunks_fts` | FTS5 über `chunks.text` (External Content), Tokenizer `unicode61 remove_diacritics 2` – „muller“ findet „Müller“ |
 | `vectors` | `chunk_id`, Vektor als Float16-BLOB, L2-normalisiert |
@@ -432,10 +453,11 @@ Umsetzung (`Access/ConfirmationDialog.swift`):
 - Knöpfe: **„Abbrechen“ ist Standard** (Return/Escape), „In den Papierkorb“ mit `hasDestructiveAction`.
 - Keine Antwort nach 2 Minuten → Abbruch. Keine grafische Sitzung (z. B. Claude Code über SSH) → Abbruch mit Hinweis.
   **Im Zweifel wird nicht gelöscht** (fail closed).
-- Erst nach Zustimmung: Revision erneut prüfen, dann `NSFileCoordinator` + `FileManager.trashItem` je Meeting,
+- Erst nach Zustimmung: Revision erneut prüfen, dann `FileManager.trashItem` je Meeting,
   Protokolleintrag, Index-Abgleich.
 - Ob ein von Claude Desktop bzw. Claude Code gestarteter Kommandozeilen-Prozess zuverlässig einen Dialog im Vordergrund
-  zeigen darf: **zu prüfen** in Phase 0 (Ausweichroute: `osascript`-Dialog mit denselben Regeln).
+  zeigen darf: **zu prüfen** auf dem Mac. Umgesetzt: `NSApplication` mit `.accessory`, Dialog über `MainActor.run`,
+  Haupt-Thread per `dispatchMain()` frei gehalten (Ausweichroute: `osascript`-Dialog mit denselben Regeln).
 
 ### 7.4 macOS-Berechtigungen (TCC)
 
@@ -448,24 +470,31 @@ Das Verschieben in den Papierkorb braucht keine zusätzliche Berechtigung.
 
 ## 8. Nebenläufigkeit und Konsistenz mit der App
 
-Mit Schreibzugriff arbeiten zwei Prozesse auf denselben Dateien. Regeln:
+Mit Schreibzugriff arbeiten zwei Prozesse auf denselben Dateien. **Umgesetzt** (Abweichung vom ersten Entwurf, der
+`NSFileCoordinator`/`NSFilePresenter` vorsah – siehe Begründung unten):
 
-1. **Eine Implementierung:** App und Helfer schreiben über `MeetingLibraryWriter` (atomar, Ordner-Umbenennung,
-   Papierkorb). Die App-internen Helfer in `MeetingStore` entfallen.
-2. **Koordination über `NSFileCoordinator`** in beiden Prozessen. `MeetingStore` wird **`NSFilePresenter`** des
-   Meeting-Ordners und lädt bei externen Änderungen neu – Apples vorgesehener Mechanismus für mehrere Prozesse.
-3. **Optimistische Sperre** über `revision` (§5.2) für jeden Schreibaufruf aus `luna-mcp`.
-4. **Geöffnetes Meeting in der App (`MeetingDocument`):**
-   - extern **umbenannt** (Titel oder Sprechername): Das Dokument übernimmt genau diese Felder, sofern der Nutzer sie
-     nicht gerade selbst ungespeichert geändert hat; andere ungespeicherte Änderungen (z. B. Beitragskorrekturen)
-     bleiben erhalten und werden danach auf den neuen Ordner gespeichert. Grund: `MeetingStore.update` schreibt heute
-     in `entry.folder` – ohne Neuladen würde die App nach einer externen Ordner-Umbenennung ins Leere schreiben.
-   - extern **gelöscht**: ausstehendes Speichern verwerfen, Meeting schließen, Hinweis „Das Meeting wurde über Claude
-     in den Papierkorb verschoben.“ Keine Wiederanlage durch einen späten Autosave.
-5. **`MeetingSummarizer`** läuft eine Zusammenfassung für ein inzwischen gelöschtes Meeting zu Ende und findet es
-   beim Speichern nicht mehr. Heute setzt `finish` dann „Zusammenfassung erstellt, aber nicht gespeichert“; künftig
-   wird `StoreError.notFound` nach einem Löschen als erwarteter Fall still verworfen.
-6. **Suchindex:** SQLite im WAL-Modus; beide Prozesse synchronisieren über dieselbe idempotente Funktion (§6.4).
+1. **Eine Implementierung:** App und Helfer schreiben über `MeetingLibrary` (atomar, Ordner-Umbenennung, Papierkorb).
+2. **Optimistische Sperre in luna-mcp:** Jeder Schreibaufruf verlangt die `revision`, die Claude gelesen hat;
+   `MeetingLibrary.update(_:expectedRevision:)` prüft sie unmittelbar vor dem Schreiben.
+3. **Zusammenführen in der App:** `MeetingDocument` merkt sich den zuletzt geladenen/gespeicherten Stand (`base`).
+   `MeetingStore.save(_:base:)` liest vor dem Schreiben die Platte; hat sich die Datei geändert, führt
+   `MeetingLibrary.merge` drei Stände zusammen: Was der Nutzer lokal geändert hat, gewinnt (auch Beitragskorrekturen),
+   alles andere – typischerweise Titel und Sprechernamen von Claude – kommt von der Platte.
+4. **Änderungen sofort sehen:** luna-mcp schreibt jede Änderung ins Aktivitätsprotokoll. `MeetingStore` prüft dessen
+   Änderungszeit alle 2 s, lädt bei Änderungseinträgen neu und sendet `externalChanges`; ein geöffnetes Dokument ohne
+   ausstehende Änderungen übernimmt den neuen Stand sofort.
+5. **Umbenannte Ordner:** `MeetingStore.currentFolder(for:)` liest die Bibliothek neu ein, wenn der gemerkte Ordner
+   nicht mehr existiert – sonst würde ein Autosave nach einer Umbenennung durch Claude ins Leere schreiben.
+6. **Gelöscht:** Findet das Speichern das Meeting nicht mehr, markiert sich das Dokument als gelöscht und speichert nie
+   wieder (kein Wiederanlegen). `MeetingSummarizer` verwirft eine fertige Zusammenfassung für ein gelöschtes Meeting still.
+7. **Suchindex:** SQLite im WAL-Modus; beide Prozesse synchronisieren über dieselbe idempotente Funktion (§6.4).
+
+**Warum nicht `NSFileCoordinator`:** Koordination schützt nur, wenn *alle* Schreiber mitmachen (Finder, iCloud, Backup-
+Werkzeuge tun es für diesen Ordner nicht), bringt Deadlock-Risiken zwischen Presenter-Queue und Main Actor und ist unter
+Linux nicht verfügbar – die Logik wäre dort nicht testbar. Revision + Zusammenführen deckt die realen Fälle ab (Claude
+ändert Titel/Namen, während die App offen ist) und ist vollständig durch Tests abgesichert. Restrisiko: ein
+Zeitfenster von Millisekunden zwischen Revisionsprüfung und Schreiben in luna-mcp; die App führt beim nächsten Speichern
+ohnehin zusammen.
 
 ---
 
@@ -493,9 +522,11 @@ Weitere Argumente: `--version`, `--selftest [<ordner>]`, `--search-selftest <eva
 - `project.yml`: lokales Paket `Packages/LunaCore` (Produkte `LunaCore`, `LunaEmbedding`), neues Target `luna-mcp`
   (`type: tool`, macOS 15) mit `LunaCore`, `LunaEmbedding`, dem SDK-Produkt `MCP` und `MLXEmbedders`. Die App bettet
   den Helfer per Copy-Files-Phase nach `Contents/MacOS/` ein (Signatur mit demselben Team, Hardened Runtime).
-  XcodeGen-Syntax dafür: **zu prüfen**.
+  XcodeGen-Syntax: **geprüft** – `xcodegen generate` erzeugt die Phase „Embed Dependencies“ mit Ziel `Executables`.
 - **MLX im Helfer:** MLX braucht seine Metal-Bibliothek zur Laufzeit. Für ein Programm in `Contents/MacOS` ist
-  `Bundle.main` das App-Bundle, die Bibliothek der App sollte also gefunden werden – **zu prüfen** in Phase 0.
+  `Bundle.main` das App-Bundle, die Bibliothek der App sollte also gefunden werden. Quelltext geprüft: MLX sucht
+  `mlx.metallib` neben der Binärdatei, dann `mlx-swift_Cmlx.bundle` in `Bundle.main` und allen geladenen Bundles
+  (`mlx/backend/metal/device.cpp`) – im Betrieb **zu prüfen** (`luna-mcp --selftest` rechnet mit dem Modell).
   Ausweichroute: Der Helfer fragt Anfrage-Vektoren über einen Unix-Socket (Rechte 0600) bei der laufenden App an und
   fällt ohne App auf die Stichwortsuche zurück.
 - `scripts/build-release.sh` bleibt der Alltagsweg; der Helfer kommt automatisch mit.
@@ -608,7 +639,8 @@ Gesamt grob **12–16 Tage**.
 | MLX im Kommandozeilen-Helfer (Metal-Bibliothek, Startzeit, RAM) | mittel | Phase-0-Messung; Ausweichroute Unix-Socket zur App, sonst Stichwortsuche |
 | Qualität der inhaltlichen Suche auf Deutsch mit ASR-Fehlern | mittel | Hybrid statt rein semantisch; Eval-Set entscheidet Modell und Tokenizer |
 | Lösch-Dialog erscheint nicht zuverlässig im Vordergrund | mittel | Phase 0; `osascript`-Ausweichroute; fail closed |
-| Konflikte zwischen App und Helfer beim Schreiben | mittel | `NSFileCoordinator`/`NSFilePresenter`, Revision, klare Regeln für geöffnete Meetings (§8) |
+| Konflikte zwischen App und Helfer beim Schreiben | niedrig | Revision, Dreiwege-Zusammenführung, Aktivitätsprotokoll, klare Regeln für geöffnete Meetings (§8) |
+| Embedding falsch berechnet (Positionen, Pooling) – Suche nur still schlechter | mittel | Positions-Offset 2 für XLM-RoBERTa explizit gesetzt; Plausibilitätsprüfung in `luna-mcp --selftest` |
 | Datenschutz-Missverständnis („lokal“ = „bleibt lokal“) | hoch, wenn schlecht erklärt | Doppeltes Opt-in, Hinweistext, README-Abschnitt, Protokolle |
 | Transkriptqualität führt zu falschen Aussagen von Claude | mittel | `instructions` weisen darauf hin; Zeitmarken als Beleg |
 
