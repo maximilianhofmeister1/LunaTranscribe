@@ -1,0 +1,6 @@
+// Kopie als Config/Local.xcconfig anlegen (wird nicht eingecheckt).
+// Team-ID findest du in Xcode → Settings → Accounts oder mit:
+//   security find-identity -v -p codesigning
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = Apple Development
+DEVELOPMENT_TEAM = DEINE_TEAM_ID

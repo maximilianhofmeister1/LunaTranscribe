@@ -2,8 +2,6 @@ import Foundation
 import AVFoundation
 import os
 
-private let log = Logger(subsystem: "com.maximhofmeister.LunaTranscribe", category: "meeting")
-
 struct MeetingProgress {
     let step: String
     /// 0…1 über die gesamte Verarbeitung
@@ -61,7 +59,7 @@ final class MeetingTranscriber {
 
         let turns = Self.buildTurns(from: segments, maxGap: maxGapWithinTurn, minDuration: minTurnDuration)
         guard !turns.isEmpty else { throw MeetingTranscriberError.noSpeech }
-        log.notice("diarization: \(segments.count) segments → \(turns.count) turns")
+        Log.meeting.notice("diarization: \(segments.count) segments → \(turns.count) turns")
 
         guard let file = try? AVAudioFile(forReading: audioURL) else { throw MeetingTranscriberError.audioUnreadable }
         let totalSeconds = Double(file.length) / file.processingFormat.sampleRate

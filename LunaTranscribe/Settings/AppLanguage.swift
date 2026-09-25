@@ -38,8 +38,9 @@ enum AppLanguage: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
 
+    /// Deutscher Name („Deutsch“, „Englisch“) – die Oberfläche ist deutsch, unabhängig von der Systemsprache.
     var displayName: String {
-        Locale.current.localizedString(forLanguageCode: rawValue)?.capitalized ?? rawValue
+        Locale(identifier: "de").localizedString(forLanguageCode: rawValue)?.capitalized ?? rawValue
     }
 
     /// Sprach-Enum von FluidAudio für Cohere Transcribe (nil = nicht unterstützt).

@@ -1,0 +1,8 @@
+// Signatur. Standard: ad-hoc („Sign to Run Locally“) – baut ohne Apple-Konto.
+// Eigene, stabile Signatur (empfohlen, sonst fragt macOS nach jedem Build erneut nach Berechtigungen):
+// Config/Local.xcconfig.example nach Config/Local.xcconfig kopieren und das eigene Team eintragen.
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY = -
+DEVELOPMENT_TEAM =
+
+#include? "Local.xcconfig"
