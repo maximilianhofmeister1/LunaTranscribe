@@ -15,6 +15,8 @@ final class AppState: ObservableObject {
     let dictation: DictationController
     /// Meeting-Modus: eigener Recorder und eigene Statusmaschine, läuft parallel zum Diktat.
     let meeting: MeetingSession
+    /// Verarbeitet beendete Meetings im Hintergrund, eines nach dem anderen.
+    let meetingQueue: MeetingProcessingQueue
     /// Meeting-Bibliothek im frei wählbaren Meeting-Ordner.
     let meetingStore: MeetingStore
     /// Zusammenfassungen über die Claude CLI.
@@ -25,6 +27,7 @@ final class AppState: ObservableObject {
     let router = MainRouter()
 
     private let overlay = OverlayController()
+    private let notifier = MeetingNotifier()
     private lazy var mainWindow = MainWindowController(state: self)
     private var escapeMonitor: EscapeKeyMonitor?
     private var cancellables = Set<AnyCancellable>()
@@ -34,7 +37,8 @@ final class AppState: ObservableObject {
     init(preloadModels: Bool = true) {
         dictation = DictationController(settings: settings, models: models, refiners: refiners)
         meetingStore = MeetingStore(settings: settings)
-        meeting = MeetingSession(settings: settings, models: models, store: meetingStore)
+        meetingQueue = MeetingProcessingQueue(settings: settings, models: models, store: meetingStore)
+        meeting = MeetingSession(settings: settings, queue: meetingQueue)
         summarizer = MeetingSummarizer(settings: settings, store: meetingStore)
         learner = VocabularyLearner(settings: settings)
 
@@ -42,6 +46,7 @@ final class AppState: ObservableObject {
         forwardChanges(of: refiners)
         forwardChanges(of: dictation)
         forwardChanges(of: meeting)
+        forwardChanges(of: meetingQueue)
         forwardChanges(of: meetingStore)
         forwardChanges(of: summarizer)
         forwardChanges(of: settings)
@@ -116,13 +121,24 @@ final class AppState: ObservableObject {
     }
 
     private func bindMeeting() {
-        // Fertig verarbeitetes Meeting direkt im Hauptfenster zeigen.
-        meeting.$lastFinishedMeetingID
-            .compactMap { $0 }
-            .removeDuplicates()
-            .sink { [weak self] id in self?.openMeeting(id) }
+        // Hintergrund-Verarbeitung meldet sich per Mitteilung statt per Fenster – stört nicht, auch
+        // nicht mitten im nächsten Meeting. Ein Klick auf die Mitteilung öffnet das Meeting.
+        notifier.onOpenMeeting = { [weak self] id in self?.openMeeting(id) }
+        meetingQueue.finished
+            .sink { [weak self] title, id in self?.notifier.meetingFinished(title: title, meetingID: id) }
             .store(in: &cancellables)
-        // Meeting-Fehler zusätzlich als Dialog: das Menü-Popover ist nach dem Klick oft schon zu.
+        meetingQueue.failed
+            .sink { [weak self] title, message in self?.notifier.meetingFailed(title: title, message: message) }
+            .store(in: &cancellables)
+        // Erlaubnis für Mitteilungen erst erfragen, wenn das erste Meeting in die Verarbeitung geht.
+        meetingQueue.$items
+            .map(\.count)
+            .removeDuplicates()
+            .filter { $0 > 0 }
+            .first()
+            .sink { [weak self] _ in self?.notifier.requestAuthorizationIfNeeded() }
+            .store(in: &cancellables)
+        // Fehler beim Starten/Beenden der Aufnahme als Dialog: das Menü-Popover ist nach dem Klick oft schon zu.
         meeting.$status
             .removeDuplicates()
             .sink { status in
@@ -154,7 +170,7 @@ final class AppState: ObservableObject {
 
     private static func showMeetingAlert(_ message: String) {
         let alert = NSAlert()
-        alert.messageText = "Meeting konnte nicht verarbeitet werden"
+        alert.messageText = "Meeting-Aufnahme fehlgeschlagen"
         alert.informativeText = message
         alert.alertStyle = .warning
         alert.addButton(withTitle: "OK")

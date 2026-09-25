@@ -189,13 +189,21 @@ temporäre WAV-Datei, kaum CPU-Last) – **Diktieren per Hotkey funktioniert wä
 und landet ebenfalls im Meeting-Transkript. Escape wirkt nur auf das Diktat; ein Meeting wird
 ausschließlich über das Menü beendet oder verworfen.
 
-**Meeting beenden** startet die Verarbeitung (Fortschritt im Menü):
+**Meeting beenden** reiht die Aufnahme in die **Hintergrund-Verarbeitung** ein – du kannst **sofort das nächste
+Meeting starten**. Die Verarbeitung läuft Meeting für Meeting nacheinander (Fortschritt im Menü unter „Im Hintergrund“,
+in der Seitenleiste und oben auf der Seite Meetings):
 
 1. Sprecher-Erkennung (Diarization) mit FluidAudios Offline-Pipeline (pyannote community-1, CoreML).
 2. Zusammenhängende Redebeiträge (Turns) werden gebildet und einzeln mit der gewählten Engine transkribiert.
-3. Das Meeting wird in der **Meeting-Bibliothek** gespeichert und das Hauptfenster öffnet sich darauf.
+3. Das Meeting wird in der **Meeting-Bibliothek** gespeichert; eine **macOS-Mitteilung** meldet es, ein Klick öffnet es.
 
-Richtwerte: 1 h Meeting ≈ 1–2 min Verarbeitung mit Parakeet, ≈ 5 min mit Cohere. Beim allerersten Mal
+Die Warteschlange liegt unter `~/Library/Application Support/LunaTranscribe/Queue` (Aufnahme + kleine Auftragsdatei mit
+Sprache und Personenzahl). **Beendest du die App mit wartenden Meetings, geht es beim nächsten Start weiter.** Schlägt eine
+Verarbeitung fehl, bleibt die Aufnahme erhalten: im Menü „Erneut versuchen“ oder „Verwerfen“. Ein Meeting lässt sich auch
+starten, während die Modelle noch laden – die Verarbeitung wartet dann einfach.
+
+Richtwerte: 1 h Meeting ≈ 1–2 min Verarbeitung mit Parakeet, ≈ 5 min mit Cohere – im Hintergrund, parallel zu Diktat
+und neuer Aufnahme. Beim allerersten Mal
 kommt die einmalige Kompilierung der Sprecher-Modelle dazu.
 
 **Systemaudio** (Einstellungen → Meetings, Standard an): Für Online-Meetings wird die Wiedergabe von Zoom, Teams,
@@ -331,6 +339,13 @@ und schreibt Diagnose (Kanalpegel) und Transkript in die Log-Datei – parallel 
 
 ```bash
 open -n /Applications/LunaTranscribe.app --args --meeting-selftest 20 --log /tmp/luna-selftest.log
+```
+
+Hintergrund-Verarbeitung ohne Mikrofon testen: reiht jede Datei als beendetes Meeting ein (wie mehrere Meetings direkt
+hintereinander), wartet auf alle und druckt Reihenfolge und Ergebnis; gespeichert wird in einen temporären Ordner:
+
+```bash
+/Applications/LunaTranscribe.app/Contents/MacOS/LunaTranscribe --queue-selftest /tmp/a.wav /tmp/b.wav
 ```
 
 Wichtig: über `open` starten, nicht direkt aus dem Terminal – sonst ordnet macOS die Berechtigung

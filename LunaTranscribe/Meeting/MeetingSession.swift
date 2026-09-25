@@ -2,15 +2,14 @@ import Foundation
 import Combine
 import os
 
-/// Zustand des Meeting-Modus. Läuft unabhängig vom Diktat (`AppState`): eigener Recorder, eigene
-/// Statusmaschine, kein Overlay. Während des Meetings wird nur aufgenommen – die gesamte
-/// Verarbeitung (Sprecher, Transkription) passiert nach „Meeting beenden“.
+/// Aufnahme des Meeting-Modus. Läuft unabhängig vom Diktat (`AppState`): eigener Recorder, eigene
+/// Statusmaschine, kein Overlay. Während des Meetings wird nur aufgenommen; „Beenden“ übergibt die
+/// Aufnahme an die `MeetingProcessingQueue` und ist sofort wieder bereit für das nächste Meeting.
 @MainActor
 final class MeetingSession: ObservableObject {
     enum Status: Equatable {
         case idle
         case recording(since: Date)
-        case processing(step: String, fraction: Double)
         case failed(String)
     }
 
@@ -19,36 +18,24 @@ final class MeetingSession: ObservableObject {
     @Published private(set) var elapsed: TimeInterval = 0
     /// Systemaudio wurde für die laufende Aufnahme tatsächlich eingebunden.
     @Published private(set) var systemAudioActive = false
-    /// ID des zuletzt fertig verarbeiteten Meetings; das Hauptfenster öffnet es.
-    @Published private(set) var lastFinishedMeetingID: UUID?
-
     private let settings: SettingsStore
-    private let models: ModelManager
-    private let store: MeetingStore
+    private let queue: MeetingProcessingQueue
     private let recorder = AudioRecorder()
     private let systemAudio = SystemAudioTap()
-    /// Bleibt zwischen Meetings geladen (Modelle sind klein), spart die Kompilierung beim nächsten Mal.
-    private let diarizer = SpeakerDiarizer()
 
     private var audioURL: URL?
     private var recordingStart: Date?
     private var elapsedTimer: Timer?
-    private var processingTask: Task<Void, Never>?
 
     var isRecording: Bool {
         if case .recording = status { return true }
         return false
     }
 
-    var isProcessing: Bool {
-        if case .processing = status { return true }
-        return false
-    }
-
-    init(settings: SettingsStore, models: ModelManager, store: MeetingStore) {
+    /// Die Aufnahme braucht kein geladenes Modell – die Warteschlange wartet selbst darauf.
+    init(settings: SettingsStore, queue: MeetingProcessingQueue) {
         self.settings = settings
-        self.models = models
-        self.store = store
+        self.queue = queue
         Self.removeOrphanedRecordings()
     }
 
@@ -56,10 +43,6 @@ final class MeetingSession: ObservableObject {
 
     func start() {
         guard status == .idle || isFailed else { return }
-        guard models.isReady else {
-            status = .failed(models.statusText)
-            return
-        }
 
         Task {
             guard await Permissions.requestMicrophone() else {
@@ -87,8 +70,8 @@ final class MeetingSession: ObservableObject {
         }
     }
 
-    /// Beendet die Aufnahme und startet die Verarbeitung. Jeder Ausgang ist sichtbar (Status + Log),
-    /// damit „Beenden“ nie stumm verpufft.
+    /// Beendet die Aufnahme und reiht sie zur Verarbeitung im Hintergrund ein. Jeder Ausgang ist
+    /// sichtbar (Status + Log), damit „Beenden“ nie stumm verpufft.
     func stop() {
         guard isRecording, let url = audioURL, let start = recordingStart else { return }
         stopCapture()
@@ -99,42 +82,22 @@ final class MeetingSession: ObservableObject {
             fail("Es kam kein Audio an (\(String(format: "%.1f", duration)) s aufgenommen). Mikrofon-/Systemaudio-Berechtigung prüfen.")
             return
         }
-        guard let engine = models.current else {
-            fail("Das Modell ist nicht geladen – Verarbeitung nicht möglich.")
-            return
-        }
 
-        status = .processing(step: "Verarbeitung startet…", fraction: 0)
-        let language = settings.languageForEngine(settings.primaryLanguage)
-        let expectedSpeakers = settings.meetingSpeakerCount > 0 ? settings.meetingSpeakerCount : nil
-        let transcriber = MeetingTranscriber(diarizer: diarizer, engine: engine)
-
-        processingTask = Task.detached(priority: .userInitiated) { [weak self] in
-            do {
-                let result = try await transcriber.run(audioURL: url, recordedAt: start, language: language,
-                                                       expectedSpeakers: expectedSpeakers) { progress in
-                    Task { @MainActor in self?.status = .processing(step: progress.step, fraction: progress.fraction) }
-                }
-                await self?.finish(with: result)
-            } catch is CancellationError {
-                // Abbruch: Zustand wurde bereits in cancel() zurückgesetzt.
-            } catch {
-                await self?.fail(error.localizedDescription)
-            }
+        do {
+            try queue.enqueue(recording: url, recordedAt: start, durationSeconds: duration,
+                              language: settings.languageForEngine(settings.primaryLanguage),
+                              expectedSpeakers: settings.meetingSpeakerCount > 0 ? settings.meetingSpeakerCount : nil)
+            audioURL = nil   // gehört jetzt der Warteschlange
+            recordingStart = nil
+            status = .idle
+        } catch {
+            fail("Die Aufnahme konnte nicht zur Verarbeitung abgelegt werden: \(error.localizedDescription)")
         }
     }
 
-    /// Bricht Aufnahme oder Verarbeitung ab und verwirft die Aufnahme.
+    /// Bricht die Aufnahme ab und verwirft sie.
     func cancel() {
-        switch status {
-        case .recording:
-            stopCapture()
-        case .processing:
-            processingTask?.cancel()
-            processingTask = nil
-        case .idle, .failed:
-            break
-        }
+        if isRecording { stopCapture() }
         discardAudio()
         status = .idle
     }
@@ -172,20 +135,7 @@ final class MeetingSession: ObservableObject {
         systemAudio.destroy()
     }
 
-    private func finish(with result: MeetingTranscript) {
-        processingTask = nil
-        // Mit „Aufnahme behalten“ zieht die WAV in den Meeting-Ordner, sonst wird sie gelöscht.
-        let keptAudio = settings.meetingKeepAudio ? audioURL : nil
-        if keptAudio != nil { audioURL = nil }
-        let entry = store.add(result, audioURL: keptAudio)
-        discardAudio()
-        status = .idle
-        lastFinishedMeetingID = entry?.id
-        Log.meeting.notice("meeting processed: \(result.turns.count) turns, saved=\(entry?.folder.lastPathComponent ?? "-", privacy: .public)")
-    }
-
     private func fail(_ message: String) {
-        processingTask = nil
         discardAudio()
         status = .failed(message)
         Log.meeting.error("meeting failed: \(message, privacy: .public)")
@@ -213,12 +163,13 @@ final class MeetingSession: ObservableObject {
 
     private static var temporaryFolder: URL { AppPaths.meetingRecordings }
 
-    /// Temporäre Aufnahme unter ~/Library/Caches – wird nach der Verarbeitung gelöscht.
+    /// Laufende Aufnahme unter ~/Library/Caches – zieht beim Beenden in die Warteschlange.
     private static func temporaryAudioURL() -> URL {
         temporaryFolder.appendingPathComponent("\(UUID().uuidString).wav")
     }
 
-    /// Reste von abgestürzten oder beim Beenden der App noch laufenden Meetings entfernen.
+    /// Reste von Aufnahmen entfernen, die beim Absturz oder Beenden der App noch liefen. Beendete
+    /// Meetings liegen längst in der Warteschlange (`AppPaths.meetingQueue`) und sind nicht betroffen.
     private static func removeOrphanedRecordings() {
         guard let files = try? FileManager.default.contentsOfDirectory(at: temporaryFolder, includingPropertiesForKeys: nil) else { return }
         for file in files { try? FileManager.default.removeItem(at: file) }

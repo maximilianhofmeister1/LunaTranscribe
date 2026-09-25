@@ -35,6 +35,18 @@ struct MeetingsPage: View {
             .background(LunaColor.surface, in: RoundedRectangle(cornerRadius: LunaMetrics.smallCornerRadius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: LunaMetrics.smallCornerRadius, style: .continuous).strokeBorder(LunaColor.stroke))
 
+            if !state.meetingQueue.items.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("In Verarbeitung")
+                        .font(LunaFont.caption(11, weight: .semibold))
+                        .textCase(.uppercase)
+                        .foregroundStyle(LunaColor.inkMuted)
+                    MeetingQueueView(queue: state.meetingQueue, compact: true)
+                }
+                .padding(10)
+                .background(LunaColor.surface, in: RoundedRectangle(cornerRadius: LunaMetrics.smallCornerRadius, style: .continuous))
+            }
+
             if let issue = state.meetingStore.folderIssue {
                 Label(issue, systemImage: "externaldrive.badge.exclamationmark")
                     .font(LunaFont.caption(11.5))

@@ -93,7 +93,8 @@ struct MenuBarView: View {
         .lunaCard(padding: 12)
     }
 
-    /// Meeting: Start/Stopp, Laufzeit, Verarbeitungsfortschritt. Läuft parallel zum Diktat.
+    /// Meeting: Start/Stopp und Laufzeit; darunter die Hintergrund-Verarbeitung beendeter Meetings.
+    /// Aufnahme und Verarbeitung sind getrennt – ein neues Meeting geht sofort nach dem Beenden.
     private var meetingCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Meeting").font(LunaFont.title(14))
@@ -102,7 +103,6 @@ struct MenuBarView: View {
                 Button { meeting.start() } label: { Label("Starten", systemImage: "person.2.wave.2.fill") }
                     .buttonStyle(.lunaSecondary)
                     .fixedSize()
-                    .disabled(!state.models.isReady)
                 speakerCountPicker
             case .recording:
                 HStack(spacing: 8) {
@@ -118,9 +118,6 @@ struct MenuBarView: View {
                     Text("Systemaudio nicht verfügbar – Berechtigung prüfen.").font(LunaFont.caption(11.5)).foregroundStyle(LunaColor.honey)
                 }
                 speakerCountPicker   // darf bis zum Beenden noch geändert werden
-            case .processing(let step, let fraction):
-                ProgressView(value: fraction) { Text(step).font(LunaFont.caption(11.5)) }.tint(LunaColor.lavender)
-                Button("Abbrechen") { meeting.cancel() }.buttonStyle(.lunaQuiet)
             case .failed(let message):
                 Label(message, systemImage: "xmark.circle").font(LunaFont.caption(11.5)).foregroundStyle(LunaColor.rose)
                 HStack {
@@ -128,6 +125,14 @@ struct MenuBarView: View {
                     if state.settings.meetingCaptureSystemAudio {
                         Button("Systemaudio-Einstellungen…") { Permissions.openSystemAudioSettings() }.buttonStyle(.lunaQuiet)
                     }
+                }
+            }
+            if !state.meetingQueue.items.isEmpty {
+                Divider().padding(.vertical, 2)
+                Text("Im Hintergrund").font(LunaFont.caption(11, weight: .semibold)).foregroundStyle(LunaColor.inkMuted)
+                MeetingQueueView(queue: state.meetingQueue, compact: true)
+                if !state.models.isReady {
+                    Hint("Startet, sobald das Modell geladen ist.")
                 }
             }
         }

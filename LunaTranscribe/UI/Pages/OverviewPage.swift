@@ -49,7 +49,6 @@ struct OverviewPage: View {
                         Label(state.meeting.isRecording ? "Meeting beenden" : "Meeting starten", systemImage: "person.2.wave.2.fill")
                     }
                     .buttonStyle(LunaButtonStyle(kind: .secondary))
-                    .disabled(!state.models.isReady || state.meeting.isProcessing)
                 }
                 .padding(.top, 4)
             }

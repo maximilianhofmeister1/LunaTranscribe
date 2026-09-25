@@ -15,7 +15,11 @@ enum AppPaths {
     /// Rettungsordner für Meetings, wenn der eingestellte Meeting-Ordner nicht erreichbar ist.
     static var unsavedMeetings: URL { applicationSupport.appending(path: "Unsaved", directoryHint: .isDirectory) }
 
-    /// Temporäre Meeting-Aufnahmen; werden nach der Verarbeitung gelöscht.
+    /// Beendete, noch nicht verarbeitete Meetings (Aufnahme + Auftrag). Bewusst nicht im Cache:
+    /// Die Warteschlange muss einen Neustart überstehen.
+    static var meetingQueue: URL { applicationSupport.appending(path: "Queue", directoryHint: .isDirectory) }
+
+    /// Laufende Meeting-Aufnahmen; wandern beim Beenden in die Warteschlange.
     static var meetingRecordings: URL {
         URL.cachesDirectory.appending(path: "LunaTranscribe/Meetings", directoryHint: .isDirectory)
     }
