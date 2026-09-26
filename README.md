@@ -367,7 +367,6 @@ Packages/LunaCore/           Swift-Paket, auch unter Linux testbar (`swift test`
                  SharedSettings, AppPaths, SummaryPrompt
   LunaMCPServer  Tools, Ressourcen, Prompts, Suche, Bestätigungs-Bremse, Diagnose (Selbsttest)
 Config/       Signing.xcconfig (+ lokale Local.xcconfig mit Team-ID)
-landing/      Landingpage (statisches HTML/CSS/JS, ohne Build – siehe landing/README.md)
 scripts/      build-release.sh, make-icon.swift (zeichnet das App-Icon), build-mediaremote-adapter.sh
 Vendor/MediaRemoteAdapter/   Framework + Perl-Skript für Now-Playing-Zugriff (macOS ≥ 15.4)
 ```
