@@ -1,5 +1,6 @@
 import Foundation
 import FoundationModels
+import LunaCore
 import os
 
 /// Nachbearbeitung mit Apples On-Device-Systemmodell (Foundation Models, macOS 26+).

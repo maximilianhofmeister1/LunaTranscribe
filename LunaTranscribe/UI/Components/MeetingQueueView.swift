@@ -1,3 +1,4 @@
+import LunaCore
 import SwiftUI
 
 /// Meetings in der Hintergrund-Verarbeitung: Fortschritt, Wartende, Fehlgeschlagene mit

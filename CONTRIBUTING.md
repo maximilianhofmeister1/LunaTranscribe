@@ -40,7 +40,15 @@ xcodebuild -project LunaTranscribe.xcodeproj -scheme LunaTranscribe -configurati
 
 ## Tests
 
-Es gibt kein Test-Target. Stattdessen reproduzierbare Entwickler-Selbsttests, die ohne UI laufen und sich selbst beenden:
+**Unit-Tests** gibt es für das Swift-Paket `Packages/LunaCore` (Datenmodell, Meeting-Bibliothek, Suchindex, MCP-Server
+über das echte Protokoll inkl. stdio). Sie brauchen weder Xcode noch Mikrofon und laufen auch unter Linux:
+
+```bash
+cd Packages/LunaCore && swift test
+```
+
+Datenmodell- und Bibliotheksänderungen gehören in `LunaCore` – App und `luna-mcp` teilen sich diesen Code. Für alles
+andere gibt es reproduzierbare Entwickler-Selbsttests, die ohne UI laufen und sich selbst beenden:
 
 | Flag | Prüft | Berechtigung |
 |---|---|---|
@@ -51,9 +59,15 @@ Es gibt kein Test-Target. Stattdessen reproduzierbare Entwickler-Selbsttests, di
 | `--queue-selftest <wav…>` | Hintergrund-Verarbeitung mehrerer Meetings | keine |
 | `--ui-snapshot <ordner>` | Rendert alle Seiten hell/dunkel als PNG | keine |
 | `--meeting-selftest <sek> --log <datei>` | Aufnahme Mikrofon + Systemaudio → Transkript | über `open -n … --args` starten |
+| `luna-mcp --selftest` | MCP-Server: jedes Tool, Ressourcen, Prompts, Embedding-Modell (falls geladen) | keine |
+| `luna-mcp --check` | Einrichtung: Meeting-Ordner, Freigaben, Suchindex, Modell | keine |
 
-Vor einem Pull Request: Debug-Build ohne neue Warnungen in `LunaTranscribe/`, betroffene Self-Tests laufen lassen,
-bei UI-Änderungen `--ui-snapshot` ansehen.
+Vor einem Pull Request: `swift test` in `Packages/LunaCore`, Debug-Build ohne neue Warnungen in `LunaTranscribe/`,
+betroffene Self-Tests laufen lassen, bei UI-Änderungen `--ui-snapshot` ansehen.
+
+**luna-mcp:** Im Serverbetrieb gehört stdout ausschließlich JSON-RPC – kein `print`, Logs über `os.Logger`
+(Kategorie `mcp`). Schreibende Tools brauchen immer die Revision; Löschen läuft nur über den Bestätigungsdialog
+(`UserConfirmer`) und nie endgültig.
 
 ## Pull Requests
 

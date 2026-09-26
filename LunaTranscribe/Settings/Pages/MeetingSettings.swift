@@ -1,4 +1,5 @@
 import AppKit
+import LunaCore
 import SwiftUI
 
 struct MeetingSettings: View {
@@ -32,6 +33,18 @@ struct MeetingSettings: View {
             LearnMore(text: "Während des Meetings wird nur aufgenommen; Sprecher-Erkennung und Transkription laufen lokal nach „Beenden“. Für Online-Meetings Kopfhörer nutzen, sonst hört das Mikrofon die Lautsprecher mit. Beim ersten Meeting fragt macOS nach der Berechtigung „Systemaudio aufnehmen“.")
         }
 
+        SettingsCard(title: "Inhaltliche Suche", systemImage: "text.magnifyingglass") {
+            ToggleRow(label: "Meetings nach Bedeutung durchsuchbar machen",
+                      hint: "Claude findet dann auch Umschreibungen („teurer werden“ zu „Preiserhöhung“). Lädt einmalig \(EmbeddingModelKind.standard.label); alles bleibt auf diesem Mac.",
+                      isOn: $settings.semanticSearchEnabled)
+            if settings.semanticSearchEnabled {
+                semanticSearchStatus
+            }
+            if !settings.mcpAccessEnabled {
+                Hint("Wirkt, sobald Meetings für Claude freigegeben sind (Einstellungen → Datenschutz).")
+            }
+        }
+
         SettingsCard(title: "Zusammenfassung mit Claude", systemImage: "sparkles") {
             Label("Die Transkription bleibt lokal. Nur wenn du bei einem Meeting „Zusammenfassen“ klickst, geht dessen Text über die Claude CLI an Anthropic.",
                   systemImage: "cloud")
@@ -63,6 +76,27 @@ struct MeetingSettings: View {
                 PromptEditor(text: $settings.summaryPrompt, isDefault: settings.isSummaryPromptDefault,
                              onReset: settings.resetSummaryPrompt)
                 Hint("„{language}“ wird durch die Sprache des Meetings ersetzt. Das Transkript hängt die App mit Zeitstempeln und Sprechernamen an.")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var semanticSearchStatus: some View {
+        switch state.searchIndexer.modelState {
+        case .off, .ready:
+            let stats = state.searchIndexer.stats
+            Label(stats.map { "Modell bereit · \($0.embedded) von \($0.chunks) Abschnitten erschlossen" } ?? "Modell bereit",
+                  systemImage: "checkmark.circle.fill")
+                .font(LunaFont.caption(12)).foregroundStyle(LunaColor.sage)
+        case .notDownloaded:
+            SettingRow(label: "Modell noch nicht geladen") {
+                Button("Laden") { state.searchIndexer.downloadModel() }.buttonStyle(.lunaSecondary)
+            }
+        case .downloading(let fraction):
+            ProgressView(value: fraction) { Text("Lade Modell …").font(LunaFont.caption(12)) }
+        case .failed(let message):
+            SettingRow(label: message) {
+                Button("Erneut versuchen") { state.searchIndexer.downloadModel() }.buttonStyle(.lunaSecondary)
             }
         }
     }

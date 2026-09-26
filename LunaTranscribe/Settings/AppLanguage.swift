@@ -1,48 +1,10 @@
-import Foundation
 import FluidAudio
+import Foundation
+import LunaCore
 
-/// Alle Sprachen, die mindestens eine Engine unterstützt.
-/// Cohere: 14 Sprachen. Parakeet v3: 25 europäische Sprachen.
-enum AppLanguage: String, CaseIterable, Identifiable, Codable {
-    case german = "de"
-    case english = "en"
-    case french = "fr"
-    case italian = "it"
-    case spanish = "es"
-    case portuguese = "pt"
-    case dutch = "nl"
-    case polish = "pl"
-    case greek = "el"
-    case arabic = "ar"
-    case chinese = "zh"
-    case japanese = "ja"
-    case korean = "ko"
-    case vietnamese = "vi"
-    // Nur Parakeet v3
-    case romanian = "ro"
-    case danish = "da"
-    case swedish = "sv"
-    case finnish = "fi"
-    case hungarian = "hu"
-    case estonian = "et"
-    case latvian = "lv"
-    case lithuanian = "lt"
-    case maltese = "mt"
-    case czech = "cs"
-    case slovak = "sk"
-    case slovenian = "sl"
-    case croatian = "hr"
-    case bulgarian = "bg"
-    case russian = "ru"
-    case ukrainian = "uk"
-
-    var id: String { rawValue }
-
-    /// Deutscher Name („Deutsch“, „Englisch“) – die Oberfläche ist deutsch, unabhängig von der Systemsprache.
-    var displayName: String {
-        Locale(identifier: "de").localizedString(forLanguageCode: rawValue)?.capitalized ?? rawValue
-    }
-
+/// Zuordnung der Sprachen (`AppLanguage`, im gemeinsamen Kern) zu den FluidAudio-Typen der Engines.
+/// Liegt in der App, weil nur sie FluidAudio linkt – luna-mcp braucht nur Namen und Codes.
+extension AppLanguage {
     /// Sprach-Enum von FluidAudio für Cohere Transcribe (nil = nicht unterstützt).
     var cohere: CohereAsrConfig.Language? { CohereAsrConfig.Language(rawValue: rawValue) }
 

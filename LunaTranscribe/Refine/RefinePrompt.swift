@@ -1,4 +1,5 @@
 import Foundation
+import LunaCore
 
 /// Backend-unabhängige Prompt-Logik: System-Anweisung für das Sprachmodell und Bereinigung
 /// seiner Antwort. Reine Funktionen ohne Zustand, damit alle Backends dasselbe Verhalten zeigen.

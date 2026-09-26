@@ -1,5 +1,6 @@
 import Foundation
 import Hub
+import LunaCore
 import MLX
 import MLXLLM
 import MLXLMCommon

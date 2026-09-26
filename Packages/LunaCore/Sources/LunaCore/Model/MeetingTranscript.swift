@@ -1,39 +1,51 @@
 import Foundation
 
 /// Ein Meeting: Redebeiträge in zeitlicher Reihenfolge plus Metadaten. Wird als `meeting.json` im
-/// Meeting-Ordner gespeichert (`MeetingStore`); TXT/Markdown entstehen nur beim Export.
+/// Meeting-Ordner gespeichert (`MeetingLibrary`); TXT/Markdown entstehen nur beim Export.
 ///
 /// Sprecher werden über stabile IDs („Sprecher 1“ …) geführt; `speakerNames` erlaubt das Umbenennen,
 /// ohne die Turns anzufassen.
-struct MeetingTranscript: Codable, Identifiable, Equatable {
-    /// Version des JSON-Formats. Bei inkompatiblen Änderungen erhöhen und in `MeetingStore` migrieren.
-    static let currentSchemaVersion = 1
+public struct MeetingTranscript: Codable, Identifiable, Equatable, Sendable {
+    /// Version des JSON-Formats. Bei inkompatiblen Änderungen erhöhen und in `MeetingLibrary` migrieren.
+    /// Neue optionale Felder (wie `isConfidential`) brauchen keine neue Version.
+    public static let currentSchemaVersion = 1
 
-    struct Turn: Codable, Identifiable, Equatable {
-        var id = UUID()
-        let speakerID: String
-        let start: TimeInterval
-        let end: TimeInterval
+    public struct Turn: Codable, Identifiable, Equatable, Sendable {
+        public var id: UUID
+        public let speakerID: String
+        public let start: TimeInterval
+        public let end: TimeInterval
         /// Vom Nutzer korrigierbar; Korrekturen speisen das lernende Wörterbuch.
-        var text: String
+        public var text: String
+
+        public init(id: UUID = UUID(), speakerID: String, start: TimeInterval, end: TimeInterval, text: String) {
+            self.id = id
+            self.speakerID = speakerID
+            self.start = start
+            self.end = end
+            self.text = text
+        }
     }
 
-    var schemaVersion = currentSchemaVersion
-    var id = UUID()
-    var title: String
-    let date: Date
-    let durationSeconds: TimeInterval
-    let engine: EngineKind
-    let language: AppLanguage
-    var turns: [Turn]
+    public var schemaVersion = currentSchemaVersion
+    public var id = UUID()
+    public var title: String
+    public let date: Date
+    public let durationSeconds: TimeInterval
+    public let engine: EngineKind
+    public let language: AppLanguage
+    public var turns: [Turn]
     /// Umbenennungen: Sprecher-ID → Anzeigename. Fehlt ein Eintrag, gilt die ID selbst.
-    var speakerNames: [String: String] = [:]
-    var summary: MeetingSummary?
+    public var speakerNames: [String: String] = [:]
+    public var summary: MeetingSummary?
     /// Dateiname eines alten TXT-Backups, aus dem dieses Meeting importiert wurde (verhindert Doppelimporte).
-    var importedFrom: String?
+    public var importedFrom: String?
+    /// Vertraulich: für Claude (MCP) unsichtbar, nicht im Suchindex, keine Cloud-Zusammenfassung.
+    /// Optional, damit ältere Dateien ohne das Feld gültig bleiben (nil = nicht vertraulich).
+    public var isConfidential: Bool?
 
-    init(title: String? = nil, date: Date, durationSeconds: TimeInterval, engine: EngineKind,
-         language: AppLanguage, turns: [Turn], speakerNames: [String: String] = [:], importedFrom: String? = nil) {
+    public init(title: String? = nil, date: Date, durationSeconds: TimeInterval, engine: EngineKind,
+                language: AppLanguage, turns: [Turn], speakerNames: [String: String] = [:], importedFrom: String? = nil) {
         self.title = title ?? Self.defaultTitle(for: date)
         self.date = date
         self.durationSeconds = durationSeconds
@@ -45,36 +57,38 @@ struct MeetingTranscript: Codable, Identifiable, Equatable {
     }
 
     /// Sprecher-IDs in der Reihenfolge ihres ersten Auftretens.
-    var speakerIDs: [String] {
+    public var speakerIDs: [String] {
         var seen = Set<String>()
         return turns.compactMap { seen.insert($0.speakerID).inserted ? $0.speakerID : nil }
     }
 
-    func displayName(for speakerID: String) -> String {
+    public func displayName(for speakerID: String) -> String {
         let custom = speakerNames[speakerID]?.trimmingCharacters(in: .whitespaces) ?? ""
         return custom.isEmpty ? speakerID : custom
     }
 
-    var wordCount: Int { turns.reduce(0) { $0 + $1.text.split(whereSeparator: \.isWhitespace).count } }
+    public var confidential: Bool { isConfidential == true }
 
-    static func defaultTitle(for date: Date) -> String {
+    public var wordCount: Int { turns.reduce(0) { $0 + $1.text.split(whereSeparator: \.isWhitespace).count } }
+
+    public static func defaultTitle(for date: Date) -> String {
         "Meeting vom \(Formatters.headerDate.string(from: date))"
     }
 
     // MARK: Export
 
-    enum ExportFormat: String, CaseIterable, Identifiable {
+    public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
         case text
         case markdown
 
-        var id: String { rawValue }
-        var label: String {
+        public var id: String { rawValue }
+        public var label: String {
             switch self {
             case .text: return "Text (.txt)"
             case .markdown: return "Markdown (.md)"
             }
         }
-        var fileExtension: String {
+        public var fileExtension: String {
             switch self {
             case .text: return "txt"
             case .markdown: return "md"
@@ -82,7 +96,7 @@ struct MeetingTranscript: Codable, Identifiable, Equatable {
         }
     }
 
-    func render(as format: ExportFormat, includeSummary: Bool = false) -> String {
+    public func render(as format: ExportFormat, includeSummary: Bool = false) -> String {
         switch format {
         case .text: return renderText(includeSummary: includeSummary)
         case .markdown: return renderMarkdown(includeSummary: includeSummary)
@@ -90,12 +104,12 @@ struct MeetingTranscript: Codable, Identifiable, Equatable {
     }
 
     /// Dateiname ohne Endung, z. B. „2026-09-15 14-03 Planung Q4“.
-    var suggestedFileName: String {
+    public var suggestedFileName: String {
         "\(Formatters.fileDate.string(from: date)) \(FileNames.sanitized(title))"
     }
 
     /// Kopfzeile mit Metadaten, von allen Formaten gemeinsam genutzt.
-    private var metadataLine: String {
+    public var metadataLine: String {
         "\(Formatters.headerDate.string(from: date)) · Dauer \(Self.clock(durationSeconds)) · \(engine.shortLabel) · \(language.displayName)"
     }
 
@@ -123,7 +137,7 @@ struct MeetingTranscript: Codable, Identifiable, Equatable {
         return lines.joined(separator: "\n")
     }
 
-    private static func demoteHeadings(_ markdown: String) -> String {
+    public static func demoteHeadings(_ markdown: String) -> String {
         markdown.split(separator: "\n", omittingEmptySubsequences: false)
             .map { $0.hasPrefix("#") ? "#" + $0 : String($0) }
             .joined(separator: "\n")
@@ -132,21 +146,22 @@ struct MeetingTranscript: Codable, Identifiable, Equatable {
     // MARK: Formatierung
 
     /// hh:mm:ss – Stunden werden nur gezeigt, wenn das Meeting so lang war.
-    static func clock(_ seconds: TimeInterval) -> String {
+    public static func clock(_ seconds: TimeInterval) -> String {
         let total = Int(seconds.rounded(.down))
         let h = total / 3600, m = (total % 3600) / 60, s = total % 60
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%02d:%02d", m, s)
     }
 
-    enum Formatters {
-        static let fileDate: DateFormatter = {
+    public enum Formatters {
+        // DateFormatter ist zum Formatieren threadsicher, solange niemand die Konfiguration ändert.
+        public nonisolated(unsafe) static let fileDate: DateFormatter = {
             let f = DateFormatter()
             f.locale = Locale(identifier: "en_US_POSIX")
             f.dateFormat = "yyyy-MM-dd HH-mm"
             return f
         }()
 
-        static let headerDate: DateFormatter = {
+        public nonisolated(unsafe) static let headerDate: DateFormatter = {
             let f = DateFormatter()
             f.locale = Locale(identifier: "de_DE")
             f.dateFormat = "dd.MM.yyyy, HH:mm"
@@ -156,18 +171,22 @@ struct MeetingTranscript: Codable, Identifiable, Equatable {
 }
 
 /// Von der Claude CLI erzeugte Zusammenfassung eines Meetings (Markdown).
-struct MeetingSummary: Codable, Equatable {
-    var markdown: String
-    var createdAt: Date
+public struct MeetingSummary: Codable, Equatable, Sendable {
+    public var markdown: String
+    public var createdAt: Date
     /// Modell, das in den Einstellungen gewählt war; nil = Standard der CLI.
-    var model: String?
+    public var model: String?
+
+    public init(markdown: String, createdAt: Date, model: String? = nil) {
+        self.markdown = markdown
+        self.createdAt = createdAt
+        self.model = model
+    }
 }
 
-extension EngineKind: Codable {}
-
-enum FileNames {
+public enum FileNames {
     /// Macht einen Titel dateinamen-tauglich: keine Pfadtrenner, keine Steuerzeichen, begrenzte Länge.
-    static func sanitized(_ name: String, maxLength: Int = 60) -> String {
+    public static func sanitized(_ name: String, maxLength: Int = 60) -> String {
         let forbidden = CharacterSet(charactersIn: "/\\:?%*|\"<>").union(.controlCharacters).union(.newlines)
         let cleaned = name.components(separatedBy: forbidden).joined(separator: "-")
             .trimmingCharacters(in: .whitespaces.union(CharacterSet(charactersIn: ".")))

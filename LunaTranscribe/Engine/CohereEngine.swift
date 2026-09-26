@@ -1,6 +1,7 @@
 import Foundation
 import CoreML
 import FluidAudio
+import LunaCore
 import Synchronization
 
 /// Cohere Transcribe (2B) via CoreML – INT8-Encoder + ANE-Decoder aus FluidAudio.

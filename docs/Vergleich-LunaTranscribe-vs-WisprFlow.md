@@ -544,6 +544,12 @@ Zusätzlich neu in v0.2, näher am Komfort von Wispr Flow:
   eigenes App-Icon, Hell- und Dunkelmodus, neues Overlay mit lebendiger Wellenform.
 - **Open Source (MIT), kostenlos** – gegenüber Wispr Flow Pro (12–15 $/Monat).
 
+Nach v0.2 dazugekommen: **MCP-Server `luna-mcp`** – schließt die Lücke „Suche via MCP“ aus Abschnitt 9. Claude Code
+und Claude Desktop durchsuchen die Meetings (Stichworte und inhaltlich, mit lokalem Embedding-Modell und lokalem
+Suchindex), lesen sie, benennen Sprecher und Meetings um und löschen – nur nach Bestätigung in einem macOS-Dialog, in den
+Papierkorb. Anders als bei Wispr ist das opt-in (doppelte Freigabe), vertrauliche Meetings sind ausgenommen, und jeder
+Zugriff steht in einem lokalen Protokoll. Details: [MCP-Server-Plan.md](MCP-Server-Plan.md).
+
 Unterschied im Meeting-Vergleich (Abschnitt 9) nach v0.2: Wispr erschließt Sprechernamen automatisch aus Kalender, Gmail und
 Slack. LunaTranscribe lässt sie von Hand benennen und bleibt dafür bei Transkription und Sprechertrennung komplett lokal.
 Die Zusammenfassung ist bei beiden eine Cloud-Leistung – bei LunaTranscribe aber nur auf Klick und über das eigene Claude-Konto.

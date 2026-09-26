@@ -1,0 +1,32 @@
+{
+  "date" : "2026-09-15T12:03:00Z",
+  "durationSeconds" : 125.5,
+  "engine" : "parakeet",
+  "id" : "A1B2C3D4-0000-4000-8000-000000000001",
+  "language" : "de",
+  "schemaVersion" : 1,
+  "speakerNames" : {
+    "Sprecher 1" : "Anna"
+  },
+  "summary" : {
+    "createdAt" : "2026-09-15T13:00:00Z",
+    "markdown" : "## Kurzfassung\nBudget für Q4 beschlossen.\n\n## Aufgaben\n- [ ] Tom: Angebot einholen"
+  },
+  "title" : "Planung Q4",
+  "turns" : [
+    {
+      "end" : 6.2,
+      "id" : "11111111-0000-4000-8000-000000000001",
+      "speakerID" : "Sprecher 1",
+      "start" : 0,
+      "text" : "Dann lass uns mit dem Budget anfangen."
+    },
+    {
+      "end" : 14,
+      "id" : "11111111-0000-4000-8000-000000000002",
+      "speakerID" : "Sprecher 2",
+      "start" : 7,
+      "text" : "Wir müssen die Preise im nächsten Quartal erhöhen, sonst reicht es nicht."
+    }
+  ]
+}

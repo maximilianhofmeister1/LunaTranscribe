@@ -1,3 +1,4 @@
+import LunaCore
 import SwiftUI
 
 struct ModelSettings: View {

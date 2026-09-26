@@ -1,4 +1,5 @@
 import KeyboardShortcuts
+import LunaCore
 import SwiftUI
 
 struct DictationSettings: View {

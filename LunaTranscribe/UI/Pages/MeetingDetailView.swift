@@ -1,3 +1,4 @@
+import LunaCore
 import SwiftUI
 
 /// Ein Meeting: Titel, Aktionen (Zusammenfassen, Export, Finder, Löschen) und zwei Tabs –
@@ -72,6 +73,12 @@ struct MeetingDetailView: View {
                 Chip(text: MeetingTranscript.clock(transcript.durationSeconds), systemImage: "clock", tint: LunaColor.inkMuted)
                 Chip(text: "\(transcript.wordCount) Wörter", systemImage: "text.alignleft", tint: LunaColor.inkMuted)
                 Chip(text: "\(transcript.engine.shortLabel) · \(transcript.language.displayName)", systemImage: "cpu", tint: LunaColor.inkMuted)
+                Toggle(isOn: confidentialBinding) {
+                    Label("Vertraulich", systemImage: transcript.confidential ? "lock.fill" : "lock.open")
+                }
+                .toggleStyle(.button)
+                .buttonStyle(.lunaQuiet)
+                .help("Vertrauliche Meetings sieht Claude nicht (luna-mcp), sie landen nicht im Suchindex und werden nicht über Claude zusammengefasst.")
             }
             if let error = document.saveError {
                 Label(error, systemImage: "exclamationmark.triangle").font(LunaFont.caption(12)).foregroundStyle(LunaColor.rose)
@@ -96,7 +103,10 @@ struct MeetingDetailView: View {
                     Label(transcript.summary == nil ? "Zusammenfassen" : "Neu zusammenfassen", systemImage: "sparkles")
                 }
                 .buttonStyle(.lunaPrimary)
-                .help("Fasst das Meeting über die Claude CLI zusammen (Text geht an Anthropic)")
+                .disabled(transcript.confidential)
+                .help(transcript.confidential
+                      ? "Vertrauliche Meetings werden nicht an Claude geschickt."
+                      : "Fasst das Meeting über die Claude CLI zusammen (Text geht an Anthropic)")
             }
 
             Menu {
@@ -243,6 +253,14 @@ struct MeetingDetailView: View {
         } catch {
             actionMessage = "Löschen fehlgeschlagen: \(error.localizedDescription)"
         }
+    }
+
+    /// Im JSON optional (ältere Meetings haben das Feld nicht); „aus“ wird als fehlendes Feld gespeichert.
+    private var confidentialBinding: Binding<Bool> {
+        Binding(
+            get: { document.transcript.confidential },
+            set: { document.transcript.isConfidential = $0 ? true : nil }
+        )
     }
 
     private func nameBinding(for speakerID: String) -> Binding<String> {

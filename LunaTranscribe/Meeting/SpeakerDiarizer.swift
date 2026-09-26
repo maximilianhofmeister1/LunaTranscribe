@@ -1,5 +1,6 @@
 import Foundation
 import FluidAudio
+import LunaCore
 
 /// Ein zusammenhängender Abschnitt, in dem ein Sprecher spricht (Sekunden ab Aufnahmestart).
 struct SpeakerSegment {

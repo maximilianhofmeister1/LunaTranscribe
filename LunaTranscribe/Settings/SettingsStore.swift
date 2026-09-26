@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import LunaCore
 import ServiceManagement
 
 enum RecordingMode: String, CaseIterable, Identifiable {
@@ -84,6 +85,20 @@ final class SettingsStore: ObservableObject {
         vocabularyEnabled ? CustomVocabulary(entries: vocabularyEntries) : .disabled
     }
 
+    // MARK: Claude (MCP) und Suche
+    // luna-mcp liest diese Werte aus derselben Domäne (`SharedSettings` in LunaCore, gleiche Schlüssel).
+
+    /// Claude darf Meetings über luna-mcp lesen. Standard aus: Registrieren allein gibt nichts frei.
+    @Published var mcpAccessEnabled: Bool { didSet { save(mcpAccessEnabled, .mcpAccessEnabled) } }
+    /// Claude darf Meetings umbenennen, Sprecher benennen und – nach Bestätigung im Dialog – löschen.
+    @Published var mcpWriteEnabled: Bool { didSet { save(mcpWriteEnabled, .mcpWriteEnabled) } }
+    /// Auch Umbenennungen erst nach einem Bestätigungsdialog ausführen.
+    @Published var mcpConfirmRenames: Bool { didSet { save(mcpConfirmRenames, .mcpConfirmRenames) } }
+    /// Der einmalige Hinweis „Was Claude liest, geht an Anthropic“ wurde bestätigt.
+    @Published var mcpCloudNoticeAccepted: Bool { didSet { save(mcpCloudNoticeAccepted, .mcpCloudNoticeAccepted) } }
+    /// Inhaltliche Suche mit lokalem Embedding-Modell (einmaliger Download).
+    @Published var semanticSearchEnabled: Bool { didSet { save(semanticSearchEnabled, .semanticSearchEnabled) } }
+
     // MARK: System
 
     /// Autostart bei der Anmeldung über SMAppService. Der Zustand lebt im System, nicht in
@@ -127,6 +142,11 @@ final class SettingsStore: ObservableObject {
         vocabularyEntries = Self.loadJSON(.vocabularyEntries, default: [])
         vocabularySuggestions = Self.loadJSON(.vocabularySuggestions, default: [])
         ignoredSuggestionKeys = Self.loadJSON(.ignoredSuggestionKeys, default: [])
+        mcpAccessEnabled = Self.load(.mcpAccessEnabled, default: false)
+        mcpWriteEnabled = Self.load(.mcpWriteEnabled, default: false)
+        mcpConfirmRenames = Self.load(.mcpConfirmRenames, default: false)
+        mcpCloudNoticeAccepted = Self.load(.mcpCloudNoticeAccepted, default: false)
+        semanticSearchEnabled = Self.load(.semanticSearchEnabled, default: false)
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
 
@@ -147,6 +167,8 @@ final class SettingsStore: ObservableObject {
         case claudeCLIPath, claudeModel, summaryPrompt, summaryCloudNoticeAccepted
         case refinerKind, refinePrompt
         case vocabularyEnabled, vocabularyEntries, vocabularySuggestions, ignoredSuggestionKeys
+        /// Auch in `SharedSettings.Key` (luna-mcp) – dort gleich halten.
+        case mcpAccessEnabled, mcpWriteEnabled, mcpConfirmRenames, mcpCloudNoticeAccepted, semanticSearchEnabled
     }
 
     private static var defaults: UserDefaults { .standard }

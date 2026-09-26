@@ -1,4 +1,5 @@
 import Foundation
+import LunaCore
 
 /// Das lernende Wörterbuch: macht aus Korrekturen im Verlauf und in Meeting-Transkripten Vorschläge
 /// und übernimmt sie auf Wunsch. Nichts wird automatisch aktiv – eine falsche Ersetzung wäre in jedem

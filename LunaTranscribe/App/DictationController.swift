@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import LunaCore
 
 /// Ein fertiges Diktat im Verlauf (nur im RAM).
 struct Transcript: Identifiable {
