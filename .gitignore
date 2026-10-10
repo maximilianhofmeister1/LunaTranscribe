@@ -6,3 +6,4 @@ DerivedData/
 .swiftpm/
 Config/Local.xcconfig
 .build/
+dist/

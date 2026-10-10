@@ -64,7 +64,7 @@ final class SystemAudioTap {
 
         let aggregateDescription: [String: Any] = [
             kAudioAggregateDeviceNameKey: "LunaTranscribe Meeting",
-            kAudioAggregateDeviceUIDKey: "com.maximhofmeister.LunaTranscribe.meeting.\(UUID().uuidString)",
+            kAudioAggregateDeviceUIDKey: "at.aljoma.lunatranscribe.meeting.\(UUID().uuidString)",
             kAudioAggregateDeviceIsPrivateKey: true,           // taucht nicht in den Systemeinstellungen auf
             kAudioAggregateDeviceIsStackedKey: false,
             kAudioAggregateDeviceMainSubDeviceKey: output,

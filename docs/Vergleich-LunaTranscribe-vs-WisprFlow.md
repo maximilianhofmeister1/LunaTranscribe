@@ -415,7 +415,7 @@ diese Personen dem Anbieter zugestimmt haben.
 | Meeting-Audio | `~/Library/Caches/LunaTranscribe/Meetings` | Bis zum Ende der Verarbeitung; verwaiste Reste werden beim Start gelöscht | WAV |
 | Meeting-Audio (behalten) | Ablageordner | Bis der Nutzer löscht | WAV |
 | Meeting-Transkript + Zusammenfassung | Frei wählbarer Meeting-Ordner (Standard `~/Documents/LunaTranscribe Meetings`) | Bis der Nutzer löscht | `meeting.json` + `summary.md`; Export als TXT/MD |
-| Einstellungen, Wörterbuch, gelernte Vorschläge, Prompts | `UserDefaults` (`~/Library/Preferences/com.maximhofmeister.LunaTranscribe.plist`) | Dauerhaft | plist, Wörterbuch als JSON |
+| Einstellungen, Wörterbuch, gelernte Vorschläge, Prompts | `UserDefaults` (`~/Library/Preferences/at.aljoma.lunatranscribe.plist`) | Dauerhaft | plist, Wörterbuch als JSON |
 | ASR-, Sprecher- und LLM-Modelle | `~/Library/Application Support/LunaTranscribe/Models` | Dauerhaft | CoreML / MLX-safetensors |
 | CTC-Boosting-Modell | `~/Library/Application Support/FluidAudio/Models` | Dauerhaft | CoreML |
 | Logs | macOS Unified Log (`os.Logger`) | Systemverwaltet | Keine Diktatinhalte, nur Zeiten und Zustände |

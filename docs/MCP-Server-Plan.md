@@ -140,7 +140,7 @@ LunaTranscribe.app/Contents/MacOS/luna-mcp        (Target „luna-mcp“, Swift 
         ├── liest/schreibt  ~/Library/Application Support/LunaTranscribe/Index/search.sqlite  (WAL)
         ├── liest           ~/Library/Application Support/LunaTranscribe/Queue/*/job.json
         ├── liest           ~/Library/Application Support/LunaTranscribe/Models/…   (Embedding-Modell, lädt nie)
-        ├── liest           UserDefaults-Domäne com.maximhofmeister.LunaTranscribe (Ordner, Schalter, Wörterbuch)
+        ├── liest           UserDefaults-Domäne at.aljoma.lunatranscribe (Ordner, Schalter, Wörterbuch)
         └── schreibt        mcp-access.log / mcp-changes.log (nur IDs und Metadaten)
 
 LunaTranscribe.app ── dieselben LunaCore-/LunaEmbedding-Typen; indexiert neue Meetings im Hintergrund,
@@ -504,7 +504,7 @@ Meeting-Ordner, Reihenfolge der Auflösung (erste gewinnt):
 
 1. Argument `--library <pfad>` (Tests, Sonderfälle)
 2. Umgebungsvariable `LUNA_MEETING_FOLDER`
-3. App-Einstellung: `UserDefaults(suiteName: "com.maximhofmeister.LunaTranscribe")`, Schlüssel `meetingExportFolder`
+3. App-Einstellung: `UserDefaults(suiteName: "at.aljoma.lunatranscribe")`, Schlüssel `meetingExportFolder`
    (historischer Name – nie umbenennen)
 4. Standard `~/Documents/LunaTranscribe Meetings`
 
