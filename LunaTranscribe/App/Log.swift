@@ -1,9 +1,9 @@
 import os
 
 /// Alle Logger der App an einer Stelle. Lesen mit:
-/// `log stream --predicate 'subsystem == "com.maximhofmeister.LunaTranscribe"'`
+/// `log stream --predicate 'subsystem == "at.aljoma.lunatranscribe"'`
 enum Log {
-    static let subsystem = "com.maximhofmeister.LunaTranscribe"
+    static let subsystem = "at.aljoma.lunatranscribe"
 
     static let timing = Logger(subsystem: subsystem, category: "timing")
     static let meeting = Logger(subsystem: subsystem, category: "meeting")

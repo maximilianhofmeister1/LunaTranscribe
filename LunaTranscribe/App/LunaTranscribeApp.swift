@@ -1,3 +1,4 @@
+import LunaCore
 import SwiftUI
 
 @main
@@ -5,6 +6,8 @@ struct LunaTranscribeApp: App {
     @StateObject private var state: AppState
 
     init() {
+        // Bundle-ID-Wechsel in 1.1.0 (com.maximhofmeister.LunaTranscribe → at.aljoma.lunatranscribe): alte Einstellungen übernehmen, bevor irgendwer sie liest.
+        SharedSettings.migrateLegacyDomain(into: .standard)
         // Entwickler-Selbsttests (Meeting/Refine/Vocabulary/Learn/Summary/UI/Queue); beenden den Prozess selbst.
         // Läuft einer, lädt AppState keine Modelle vor – sonst konkurrieren zwei Downloads um dieselbe Datei.
         let selfTestRunning = LearnSelfTest.runIfRequested() || MeetingSelfTest.runIfRequested()

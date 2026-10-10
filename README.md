@@ -49,6 +49,18 @@ erscheint in Systemeinstellungen → Allgemein → Anmeldeobjekte). Erst aktivie
 Kein Apple-Developer-Programm nötig: Ein Development-Zertifikat (kostenlose Apple-ID reicht) genügt für
 den eigenen Mac. Erst für die Weitergabe an andere bräuchte es Developer ID + Notarisierung.
 
+## DMG für GitHub Releases
+
+```bash
+./scripts/package-release.sh
+```
+
+Baut Release und legt `dist/LunaTranscribe-<Version>.dmg` samt SHA-256 ab. Signiert wird mit
+„Developer ID Application“, falls vorhanden, sonst mit „Apple Development“. Mit Developer ID und einem
+notarytool-Profil (`xcrun notarytool store-credentials luna-notary …`) wird die DMG zusätzlich
+notarisiert und geheftet. Ohne Notarisierung blockiert Gatekeeper den ersten Start; die App lässt sich dann
+unter Systemeinstellungen → Datenschutz & Sicherheit → „Trotzdem öffnen“ freigeben.
+
 ## Erster Start
 
 1. **Mikrofon**-Dialog erlauben.
@@ -367,7 +379,7 @@ Packages/LunaCore/           Swift-Paket, auch unter Linux testbar (`swift test`
                  SharedSettings, AppPaths, SummaryPrompt
   LunaMCPServer  Tools, Ressourcen, Prompts, Suche, Bestätigungs-Bremse, Diagnose (Selbsttest)
 Config/       Signing.xcconfig (+ lokale Local.xcconfig mit Team-ID)
-scripts/      build-release.sh, make-icon.swift (zeichnet das App-Icon), build-mediaremote-adapter.sh
+scripts/      build-release.sh, package-release.sh (DMG für GitHub Releases), make-icon.swift (zeichnet das App-Icon), build-mediaremote-adapter.sh
 Vendor/MediaRemoteAdapter/   Framework + Perl-Skript für Now-Playing-Zugriff (macOS ≥ 15.4)
 ```
 

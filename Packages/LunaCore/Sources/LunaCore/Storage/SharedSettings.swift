@@ -5,7 +5,11 @@ import Foundation
 /// übereinstimmen – nie umbenennen.
 public struct SharedSettings: Equatable, Sendable {
     /// Bundle-ID der App = Name ihrer UserDefaults-Domäne.
-    public static let appDomain = "com.maximhofmeister.LunaTranscribe"
+    public static let appDomain = "at.aljoma.lunatranscribe"
+    /// Bundle-ID vor Version 1.1.0; ihre Einstellungen übernimmt `migrateLegacyDomain` einmalig.
+    public static let legacyAppDomain = "com.maximhofmeister.LunaTranscribe"
+    /// Merker in der neuen Domäne: Übernahme ist erledigt (auch wenn es nichts zu übernehmen gab).
+    static let legacyMigrationKey = "migratedFromLegacyDomain"
 
     public enum Key {
         /// Historischer Name aus der Zeit, als der Ordner nur Backups/Exporte enthielt.
@@ -65,6 +69,21 @@ public struct SharedSettings: Equatable, Sendable {
             mcpConfirmRenames: bool(Key.mcpConfirmRenames, false),
             semanticSearchEnabled: bool(Key.semanticSearchEnabled, false)
         )
+    }
+
+    /// Übernimmt einmalig alle Einstellungen der alten Bundle-ID (Wörterbuch, Hotkeys, Meeting-Ordner, Prompts …)
+    /// in `defaults`. Schlüssel, die dort schon gesetzt sind, bleiben unangetastet; die alte Domäne bleibt erhalten.
+    /// Muss laufen, bevor irgendetwas Einstellungen liest.
+    @discardableResult
+    public static func migrateLegacyDomain(into defaults: UserDefaults, legacyDomain: String = legacyAppDomain) -> Int {
+        guard !defaults.bool(forKey: legacyMigrationKey) else { return 0 }
+        var copied = 0
+        for (key, value) in defaults.persistentDomain(forName: legacyDomain) ?? [:] where defaults.object(forKey: key) == nil {
+            defaults.set(value, forKey: key)
+            copied += 1
+        }
+        defaults.set(true, forKey: legacyMigrationKey)
+        return copied
     }
 
     /// Liest die aktuellen Werte aus der Domäne der App – aus einem anderen Prozess (luna-mcp).

@@ -28,6 +28,8 @@ Release build, sign, install to `/Applications`, and launch (the everyday path; 
 ./scripts/build-release.sh
 ```
 
+`./scripts/package-release.sh` builds a distributable `dist/LunaTranscribe-<version>.dmg` (+ `.sha256`) for GitHub Releases instead of installing: signs with „Developer ID Application" if present (then notarizes + staples via the `luna-notary` notarytool profile), else „Apple Development" (not notarized). Bump `MARKETING_VERSION`/`CFBundleShortVersionString` and the build number in `project.yml` before a release.
+
 Code signing comes from `Config/Signing.xcconfig` (ad-hoc by default, so anyone can build) which `#include?`s the gitignored `Config/Local.xcconfig` holding the maintainer's `DEVELOPMENT_TEAM` (template: `Local.xcconfig.example`). A stable team keeps TCC permissions (mic, accessibility, system audio) across rebuilds; never put a team ID back into `project.yml` (target settings would override the xcconfig). There is no App Sandbox (needed for global hotkeys + ⌘V injection) and hardened runtime is on.
 
 Building needs the **Metal Toolchain** (separate Xcode component since Xcode 26; `xcodebuild -downloadComponent MetalToolchain`) because mlx-swift compiles its GPU kernels. The first build after a clean takes several minutes for that. `FoundationModels` is weak-linked (`OTHER_LDFLAGS` in `project.yml`) so the macOS 15 deployment target still launches; every use of that framework sits behind `#available(macOS 26, *)`.
@@ -58,7 +60,7 @@ While any self-test runs, `AppState(preloadModels: false)` skips loading models 
 
 `luna-mcp` has its own checks (no permissions needed): `luna-mcp --selftest` (temp sample library, every tool/resource/prompt, delete only with a scripted „decline“, plus an embedding sanity check if the model is present) and `luna-mcp --check` (real setup, read-only; also behind „Verbindung testen“ in Settings). Both live in `LunaMCPServer/Diagnostics.swift` so they are unit-tested too.
 
-Logs go through `Log.<category>` (`App/Log.swift`: `timing`, `meeting`, `systemaudio`, `refine`, `vocabulary`, `summary`, `search`; `luna-mcp` logs as category `mcp`), subsystem `com.maximhofmeister.LunaTranscribe`; read with `log stream --predicate 'subsystem == "com.maximhofmeister.LunaTranscribe"'`.
+Logs go through `Log.<category>` (`App/Log.swift`: `timing`, `meeting`, `systemaudio`, `refine`, `vocabulary`, `summary`, `search`; `luna-mcp` logs as category `mcp`), subsystem `at.aljoma.lunatranscribe`; read with `log stream --predicate 'subsystem == "at.aljoma.lunatranscribe"'`.
 
 The app icon is drawn in code: `swift scripts/make-icon.swift` regenerates `Resources/Assets.xcassets/AppIcon.appiconset` (`--preview <png>` for one 1024 px image). `scripts/build-mediaremote-adapter.sh` rebuilds the vendored `Vendor/MediaRemoteAdapter` framework from upstream (needs cmake); only needed when bumping that dependency.
 
@@ -93,7 +95,7 @@ Two independent state machines share one loaded model:
 
 **Media pause** (`Output/MediaPlaybackController`): macOS ≥ 15.4 blocks MediaRemote for normal apps, so the vendored `MediaRemoteAdapter.framework` (embedded, not linked, code-signed) is loaded by `/usr/bin/perl` via `mediaremote-adapter.pl` (bundled as a resource). Only resumes playback it paused itself.
 
-**Settings** (`Settings/SettingsStore`): singleton over `UserDefaults`; each `@Published` property persists in `didSet` via typed `Key`s and `save`/`load`/`saveJSON`/`saveUnlessDefault` helpers (key raw values are stored data — never rename). `launchAtLogin` is backed by `SMAppService`, not defaults. The UI is `Settings/Pages/` (one view per `SettingsSection`) shown inside the main window; there is no separate Settings scene.
+**Settings** (`Settings/SettingsStore`): singleton over `UserDefaults`; each `@Published` property persists in `didSet` via typed `Key`s and `save`/`load`/`saveJSON`/`saveUnlessDefault` helpers (key raw values are stored data — never rename). `launchAtLogin` is backed by `SMAppService`, not defaults. The bundle ID (= defaults domain) is `at.aljoma.lunatranscribe` since 1.1.0; `SharedSettings.migrateLegacyDomain` copies the old `com.maximhofmeister.LunaTranscribe` domain once at launch (first line of `LunaTranscribeApp.init`), so never read settings before it. The UI is `Settings/Pages/` (one view per `SettingsSection`) shown inside the main window; there is no separate Settings scene.
 
 **UI & design** (`UI/`): design system „Mondnacht" in `UI/Theme` — `LunaColor` (dynamic light/dark tokens), `LunaFont` (Fraunces variable serif with SOFT/WONK axes for display/titles, Figtree for text; bundled OFL fonts registered at launch via `registerBundledFonts`, silent fallback to New York / SF Rounded), `LunaMetrics`, and components (`lunaCard`, `LunaButtonStyle` `.lunaPrimary/.lunaSecondary/.lunaQuiet/.lunaDestructive`, `LunaPage`, `SectionTitle`, `LearnMore`, `Hint`, `Chip`, `LoadStatusView`, `WaveformView`, `MarkdownView`). `MainWindowController` is a plain `NSWindow` (resizable, frame autosaved as `LunaMainWindow`, transparent titlebar) hosting `MainView` (`NavigationSplitView`, sidebar + `MainPage`); `MainRouter` holds page, selected meeting and settings section. German display strings for languages and dates (`AppLanguage.displayName`, `Date.lunaDateTime`) regardless of system locale.
 
