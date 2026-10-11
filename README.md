@@ -1,3 +1,6 @@
+<img width="1920" height="540" alt="LunaTranscribe Cover Image" src="https://github.com/user-attachments/assets/21b16214-d341-4902-81ba-7e0a4a3d6524" />
+
+
 # LunaTranscribe
 
 Lokale Diktier-App für die macOS-Menüleiste. Hotkey drücken → sprechen → Text wird in die aktive App eingefügt.
