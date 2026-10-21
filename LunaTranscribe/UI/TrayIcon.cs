@@ -101,6 +101,10 @@ public sealed class TrayIcon : IDisposable
         {
             StatusKind.Recording => TrayIconKind.Recording,
             StatusKind.Transcribing => TrayIconKind.Transcribing,
+            StatusKind.Refining => TrayIconKind.Refining,
+            // Dahinter zeigt das Symbol ein laufendes Meeting bzw. die Hintergrund-Verarbeitung (wie die macOS-Menüleiste).
+            _ when _state.MeetingRecording => TrayIconKind.Meeting,
+            _ when _state.MeetingQueue.IsProcessing => TrayIconKind.Transcribing,
             _ when _state.Models.State.Kind == ModelStateKind.Loading => TrayIconKind.Loading,
             _ when _state.Models.State.Kind == ModelStateKind.Failed => TrayIconKind.Failed,
             _ => TrayIconKind.Idle,
@@ -155,7 +159,7 @@ public sealed class TrayIcon : IDisposable
     }
 }
 
-public enum TrayIconKind { Idle, Recording, Transcribing, Loading, Failed }
+public enum TrayIconKind { Idle, Recording, Transcribing, Refining, Meeting, Loading, Failed }
 
 /// <summary>Zeichnet die Tray-Symbole zur Laufzeit (Wellenform-Glyphe in Schwarz/Weiß je nach Taskleisten-Design).</summary>
 public static class TrayIcons
@@ -174,6 +178,7 @@ public static class TrayIcons
             var fg = lightTaskbar ? SD.Color.FromArgb(20, 20, 20) : SD.Color.White;
             var muted = lightTaskbar ? SD.Color.FromArgb(120, 120, 120) : SD.Color.FromArgb(180, 180, 180);
             var red = SD.Color.FromArgb(229, 57, 53);
+            var honey = SD.Color.FromArgb(0xE8, 0xB0, 0x4B);
 
             switch (kind)
             {
@@ -185,6 +190,13 @@ public static class TrayIcons
                     break;
                 case TrayIconKind.Transcribing:
                     DrawDots(g, s, fg);
+                    break;
+                case TrayIconKind.Refining:
+                    DrawSparkles(g, s, fg);
+                    break;
+                case TrayIconKind.Meeting:
+                    DrawWave(g, s, fg);
+                    DrawRecordBadge(g, s, honey);
                     break;
                 case TrayIconKind.Loading:
                     DrawWave(g, s, muted);
@@ -232,6 +244,35 @@ public static class TrayIcons
             FillRounded(g, brush, x, y, barW, bh, barW / 2);
             x += barW + gap;
         }
+    }
+
+    /// <summary>Drei vierzackige Sterne (Nachbearbeitung, wie das SF-Symbol „sparkles“).</summary>
+    private static void DrawSparkles(SD.Graphics g, int s, SD.Color color)
+    {
+        using var brush = new SD.SolidBrush(color);
+        void Star(float cx, float cy, float r)
+        {
+            var i = r * 0.28f;
+            using var path = new SD.Drawing2D.GraphicsPath();
+            path.AddBezier(cx, cy - r, cx + i, cy - i, cx + i, cy - i, cx + r, cy);
+            path.AddBezier(cx + r, cy, cx + i, cy + i, cx + i, cy + i, cx, cy + r);
+            path.AddBezier(cx, cy + r, cx - i, cy + i, cx - i, cy + i, cx - r, cy);
+            path.AddBezier(cx - r, cy, cx - i, cy - i, cx - i, cy - i, cx, cy - r);
+            g.FillPath(brush, path);
+        }
+        Star(s * 0.42f, s * 0.58f, s * 0.34f);
+        Star(s * 0.78f, s * 0.22f, s * 0.15f);
+        Star(s * 0.82f, s * 0.78f, s * 0.10f);
+    }
+
+    /// <summary>Aufnahme-Punkt unten rechts (laufendes Meeting).</summary>
+    private static void DrawRecordBadge(SD.Graphics g, int s, SD.Color color)
+    {
+        var r = s * 0.19f;
+        var cx = s - r - s * 0.03f;
+        var cy = s - r - s * 0.03f;
+        using var brush = new SD.SolidBrush(color);
+        g.FillEllipse(brush, cx - r, cy - r, 2 * r, 2 * r);
     }
 
     private static void DrawDots(SD.Graphics g, int s, SD.Color color)

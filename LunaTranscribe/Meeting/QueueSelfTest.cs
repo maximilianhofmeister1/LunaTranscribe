@@ -19,9 +19,8 @@ namespace LunaTranscribe.Meeting;
 /// Kopiert jede Datei als beendetes Meeting in eine Warteschlange (so, als hätte man mehrere Meetings direkt
 /// hintereinander beendet), wartet, bis alle verarbeitet sind, und druckt Reihenfolge, Zeiten und Ergebnis.
 ///
-/// Ohne <c>--fake</c> läuft die Pipeline der App (<c>AppState.CreateMeetingPipeline</c>; bis zur Integration des
-/// Diarizers <see cref="WholeFilePipeline"/>: ganze Datei mit der eingestellten Engine, ein Sprecher) – das Modell
-/// wird dafür geladen. <c>--fake</c> nutzt <see cref="FakeMeetingPipeline"/> ohne Modell (prüft nur den Ablauf).
+/// Ohne <c>--fake</c> läuft die echte Pipeline der App (<see cref="TranscriberPipeline"/>: Sprechererkennung +
+/// Transkription je Beitrag mit der eingestellten Engine) – die Modelle werden dafür geladen. <c>--fake</c> nutzt <see cref="FakeMeetingPipeline"/> ohne Modell (prüft nur den Ablauf).
 ///
 /// Danach zwei Invarianten: Ein Auftrag übersteht einen Neustart (neue Warteschlange auf demselben Ordner nimmt ihn
 /// wieder auf), und „Verwerfen“ während der Verarbeitung löscht Aufnahme und Auftrag. Alles läuft in einem
@@ -54,7 +53,7 @@ public static class QueueSelfTest
         {
             var store = new MeetingStore(settings, dispatcher, Path.Combine(temp, "Bibliothek"), Path.Combine(temp, "Unsaved"));
             var queueFolder = Path.Combine(temp, "Queue");
-            IMeetingPipeline pipeline = fake ? new FakeMeetingPipeline() : new WholeFilePipeline();
+            IMeetingPipeline pipeline = fake ? new FakeMeetingPipeline() : new TranscriberPipeline();
             var queue = Create(settings, models, store, pipeline, queueFolder, fake);
             models.CanUnload = () => !queue.IsProcessing;
             SelfTests.Print($"Pipeline: {(fake ? "Fake (ohne Modell)" : $"{pipeline.GetType().Name} mit {settings.Engine.ShortLabel()}")}");

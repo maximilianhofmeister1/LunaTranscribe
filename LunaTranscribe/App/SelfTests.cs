@@ -34,6 +34,7 @@ public static class SelfTests
     public static async Task<int> RunAsync(string[] args)
     {
         AttachConsole(ATTACH_PARENT_PROCESS);
+        try { Console.OutputEncoding = System.Text.Encoding.UTF8; } catch { }
         var method = Find(args[0])!;
         try
         {

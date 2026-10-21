@@ -93,6 +93,7 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         Meetings = new MeetingStore(Settings, dispatcher);
         MeetingQueue = new MeetingProcessingQueue(Settings, Models, Meetings, CreateMeetingPipeline());
         Summarizer = new MeetingSummarizer(Settings, Meetings);
+        Meeting = new MeetingSession(Settings, MeetingQueue, dispatcher);
         BindMeetings();
 
         _hook = new KeyboardHook(dispatcher) { Primary = Settings.PrimaryHotkey, Secondary = Settings.SecondaryHotkey, Refined = Settings.RefinedHotkey };
@@ -147,6 +148,7 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         if (interactive)
         {
             Meetings.StartWatching();
+            Meeting.RescueOrphanedRecordings();   // Aufnahmen, die beim letzten Beenden/Absturz noch liefen
             MeetingQueue.Active = true;   // wartende Meetings vom letzten Lauf weiterverarbeiten
         }
 
@@ -267,12 +269,8 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
 
     // MARK: Meetings
 
-    /// <summary>
-    /// Die Verarbeitung beendeter Meetings. Integration: hier den echten <c>MeetingTranscriber</c>
-    /// (Sprechererkennung + Transkription je Beitrag) einsetzen; bis dahin transkribiert
-    /// <see cref="WholeFilePipeline"/> die ganze Aufnahme als ein Sprecher.
-    /// </summary>
-    private static IMeetingPipeline CreateMeetingPipeline() => new WholeFilePipeline();
+    /// <summary>Die Verarbeitung beendeter Meetings: Sprechererkennung, dann Transkription je Redebeitrag.</summary>
+    private static IMeetingPipeline CreateMeetingPipeline() => new TranscriberPipeline();
 
     private void BindMeetings()
     {
@@ -281,6 +279,20 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
             if (e.PropertyName != nameof(MeetingStore.Entries)) return;
             OnPropertyChanged(nameof(MeetingCount));
             OnPropertyChanged(nameof(RecentMeetings));
+        };
+        Meeting.PropertyChanged += (_, e) =>
+        {
+            switch (e.PropertyName)
+            {
+                case nameof(MeetingSession.Status):
+                    OnPropertyChanged(nameof(MeetingRecording));
+                    OnPropertyChanged(nameof(MeetingStatus));
+                    // Meeting-Fehler zusätzlich als Mitteilung – das Popover ist dann meist zu.
+                    if (Meeting.Status == MeetingStatusKind.Failed) Notifier.MeetingFailed("Meeting", Meeting.Failure);
+                    break;
+                case nameof(MeetingSession.ElapsedText): OnPropertyChanged(nameof(MeetingElapsedText)); break;
+                case nameof(MeetingSession.SystemAudioActive): OnPropertyChanged(nameof(MeetingStatus)); break;
+            }
         };
         MeetingQueue.PropertyChanged += (_, e) =>
         {
@@ -305,13 +317,28 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
     /// <summary>Die drei neuesten Meetings für die Übersicht.</summary>
     public IReadOnlyList<MeetingEntry> RecentMeetings => Meetings.Entries.Take(3).ToList();
 
-    // MARK: Meeting-Aufnahme & Wörterbuch (Platzhalter bis zur Integration)
+    // MARK: Meeting-Aufnahme
+
+    /// <summary>Aufnahme des Meeting-Modus (unabhängig vom Diktat; Diktieren geht währenddessen weiter).</summary>
+    public MeetingSession Meeting { get; }
+
+    public bool MeetingRecording => Meeting.IsRecording;
+    public string MeetingElapsedText => Meeting.ElapsedText;
+
+    /// <summary>Für Bindungen, die auf jeden Statuswechsel der Meeting-Aufnahme reagieren.</summary>
+    public MeetingStatusKind MeetingStatus => Meeting.Status;
+
+    /// <summary>Startet ein Meeting bzw. beendet das laufende (→ Hintergrund-Verarbeitung).</summary>
+    public void ToggleMeetingFromMenu()
+    {
+        if (Meeting.IsRecording) Meeting.Stop();
+        else Meeting.Start();
+    }
+
+    // MARK: Wörterbuch-Plakette
 
     /// <summary>Offene Wörterbuch-Vorschläge (Plakette in der Seitenleiste).</summary>
     public int SuggestionCount => Settings.VocabularyEnabled ? Settings.VocabularySuggestions.Count : 0;
-    public bool MeetingRecording => false;
-    public string MeetingElapsedText => "";
-    public void ToggleMeetingFromMenu() { }
 
     /// <summary>Nur für UI-Snapshots: zeigt einen Zustand, ohne aufzunehmen.</summary>
     internal void PreviewStatus(StatusKind status, string notice = "")
@@ -634,6 +661,7 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
 
     public void Dispose()
     {
+        Meeting.Shutdown();   // laufende Aufnahme abschließen und einreihen – geht nie verloren
         Meetings.FlushOpenDocuments();
         Meetings.StopWatching();
         MeetingQueue.Shutdown();   // laufender Auftrag bleibt in der Warteschlange und läuft beim nächsten Start neu

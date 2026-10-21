@@ -37,6 +37,10 @@ public partial class MenuPopup : Window
     private readonly ComboBox _speakerCount = new() { FontSize = 12, HorizontalAlignment = HorizontalAlignment.Left, MinHeight = 26 };
     private readonly VStack _meetingQueue = new() { Spacing = 8 };
     private readonly TextBlock _queueHint = new() { Text = "Startet, sobald das Modell geladen ist." };
+    private readonly TextBlock _meetingHint = new();
+    private readonly TextBlock _systemAudioWarning = new() { Text = "Systemaudio nicht verfügbar – es wird nur das Mikrofon aufgenommen." };
+    private readonly VStack _meetingFailed = new() { Spacing = 6 };
+    private readonly TextBlock _meetingFailure = new();
     private readonly LunaCard _historyCard = new() { Padding = new Thickness(12) };
     private readonly VStack _historyItems = new() { Spacing = 6 };
 
@@ -258,12 +262,34 @@ public partial class MenuPopup : Window
         DockPanel.SetDock(dot, Dock.Left);
         var stop = new Button { Content = "Beenden" }.Styled("Luna.Primary");
         stop.Click += (_, _) => _state.ToggleMeetingFromMenu();
+        var discard = new Button { Content = "Verwerfen", Margin = new Thickness(4, 0, 0, 0) }.Styled("Luna.Quiet");
+        discard.Click += (_, _) =>
+        {
+            if (LunaDialog.Confirm(this, "Meeting verwerfen?", "Die laufende Aufnahme wird gelöscht und nicht transkribiert.", "Verwerfen", destructive: true))
+                _state.Meeting.Cancel();
+        };
+        DockPanel.SetDock(discard, Dock.Right);
         DockPanel.SetDock(stop, Dock.Right);
         _meetingRecording.Children.Add(dot);
+        _meetingRecording.Children.Add(discard);
         _meetingRecording.Children.Add(stop);
         _meetingElapsed.Styled("Luna.TextBase");
         _meetingRecording.Children.Add(_meetingElapsed);
         _meetingBody.Children.Add(_meetingRecording);
+        _meetingHint.Styled("Luna.Hint");
+        _meetingBody.Children.Add(_meetingHint);
+        _systemAudioWarning.Styled("Luna.Caption").Brushed(TextBlock.ForegroundProperty, "Luna.Honey");
+        _systemAudioWarning.FontSize = 11.5;
+        _meetingBody.Children.Add(_systemAudioWarning);
+
+        // Fehlgeschlagener Start/Stopp
+        _meetingFailure.Styled("Luna.Caption").Brushed(TextBlock.ForegroundProperty, "Luna.Rose");
+        _meetingFailure.FontSize = 11.5;
+        var ok = new Button { Content = "OK", HorizontalAlignment = HorizontalAlignment.Left };
+        ok.Click += (_, _) => _state.Meeting.DismissError();
+        _meetingFailed.Children.Add(_meetingFailure);
+        _meetingFailed.Children.Add(ok);
+        _meetingBody.Children.Add(_meetingFailed);
 
         // Bekannte Teilnehmerzahl hilft der Sprechererkennung enorm (bei ähnlichen Stimmen landet sonst alles bei
         // einem Sprecher). 0 = automatisch; bis zum Beenden änderbar.
@@ -294,6 +320,16 @@ public partial class MenuPopup : Window
         _meetingStart.Visibility = recording ? Visibility.Collapsed : Visibility.Visible;
         _meetingRecording.Visibility = recording ? Visibility.Visible : Visibility.Collapsed;
         _meetingElapsed.Text = _state.MeetingElapsedText;
+        var failed = _state.Meeting.Status == Meeting.MeetingStatusKind.Failed;
+        _meetingFailed.Visibility = failed ? Visibility.Visible : Visibility.Collapsed;
+        _meetingFailure.Text = _state.Meeting.Failure;
+        _meetingStart.Visibility = recording || failed ? Visibility.Collapsed : Visibility.Visible;
+        _meetingHint.Visibility = recording ? Visibility.Visible : Visibility.Collapsed;
+        _meetingHint.Text = _state.Meeting.SystemAudioActive
+            ? "Mikrofon + Systemaudio · Diktieren weiterhin möglich"
+            : "Nur Mikrofon · Diktieren weiterhin möglich";
+        _systemAudioWarning.Visibility = recording && _state.Settings.MeetingCaptureSystemAudio && !_state.Meeting.SystemAudioActive
+            ? Visibility.Visible : Visibility.Collapsed;
 
         _updating = true;
         try
