@@ -79,7 +79,7 @@ public abstract class SherpaEngineBase : ITranscriptionEngine
                     if (sb.Length > 0) sb.Append(' ');
                     sb.Append(text);
                 }
-                return sb.ToString().Trim();
+                return TranscriptionVocabulary.Apply(sb.ToString().Trim());
             }, ct);
         }
         finally

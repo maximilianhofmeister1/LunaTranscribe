@@ -28,6 +28,19 @@ public static class UISnapshotSelfTest
         var app = Application.Current;
         var state = new AppState(app.Dispatcher, interactive: false);
         SeedHistory(state);
+        // Beispieldaten für Wörterbuch und Verlauf; die echten Einstellungen werden am Ende wiederhergestellt.
+        var settings = state.Settings;
+        var savedVocabulary = settings.VocabularyState;
+        var savedVocabularyEnabled = settings.VocabularyEnabled;
+        var savedKeepHistory = settings.KeepHistory;
+        try
+        {
+        settings.KeepHistory = true;
+        settings.VocabularyEnabled = true;
+        settings.VocabularyState = new VocabularyState(
+            new[] { new VocabularyEntry("weclapp", new[] { "Weglap", "Weg Lab" }), new VocabularyEntry("LunaTranscribe", new[] { "Luna Transcribe" }) },
+            new[] { new VocabularySuggestion("Kubernetes", "Kuberneedes") { Count = 2 } },
+            new System.Collections.Generic.HashSet<string>());
 
         foreach (var dark in new[] { false, true })
         {
@@ -76,6 +89,13 @@ public static class UISnapshotSelfTest
             }
             state.PreviewStatus(StatusKind.Idle);
             overlay.Close();
+        }
+        }
+        finally
+        {
+            settings.VocabularyState = savedVocabulary;
+            settings.VocabularyEnabled = savedVocabularyEnabled;
+            settings.KeepHistory = savedKeepHistory;
         }
         LunaTheme.Apply(app.Resources, LunaTheme.SystemUsesDarkMode());
         SelfTests.Print("UI-Snapshots: " + dir);

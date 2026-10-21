@@ -86,8 +86,16 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
                 case nameof(SettingsStore.RefinedHotkey): _hook.Refined = Settings.RefinedHotkey; break;
                 case nameof(SettingsStore.Engine): Models.EnsureLoaded(Settings.Engine); break;
                 case nameof(SettingsStore.UnloadAfterMinutes): Models.UnloadAfter = TimeSpan.FromMinutes(Settings.UnloadAfterMinutes); break;
+                case nameof(SettingsStore.VocabularyEnabled):
+                case nameof(SettingsStore.VocabularyEntries):
+                    ApplyVocabulary();
+                    OnPropertyChanged(nameof(SuggestionCount));
+                    break;
+                case nameof(SettingsStore.VocabularySuggestions): OnPropertyChanged(nameof(SuggestionCount)); break;
             }
         };
+
+        ApplyVocabulary();
 
         // Modell direkt beim Start laden, damit der erste Hotkey sofort reagiert.
         Models.CanUnload = () => Status == StatusKind.Idle;
@@ -211,7 +219,8 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
 
     // MARK: Meeting & Wörterbuch (Platzhalter bis zur Integration)
 
-    public int SuggestionCount => 0;
+    /// <summary>Offene Wörterbuch-Vorschläge (Plakette in der Seitenleiste).</summary>
+    public int SuggestionCount => Settings.VocabularyEnabled ? Settings.VocabularySuggestions.Count : 0;
     public bool MeetingRecording => false;
     public string MeetingElapsedText => "";
     public int MeetingsPending => 0;
@@ -407,7 +416,7 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
             if (keepHistory)
             {
                 History.Insert(0, new Transcript(DateTime.Now, text, language, duration, elapsed));
-                while (History.Count > 20) History.RemoveAt(History.Count - 1);
+                while (History.Count > HistoryLimit) History.RemoveAt(History.Count - 1);
             }
             Settings.DailyDictationStats = Settings.DailyDictationStats.Adding(DailyDictationStats.CountWords(text));
             await TextInjector.InsertAsync(text);
@@ -420,7 +429,56 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         }
     }
 
+    public const int HistoryLimit = 20;
+
     public void ClearHistory() => History.Clear();
+
+    /// <summary>Korrigierter Text eines Verlaufseintrags (Verlauf-Seite).</summary>
+    public void UpdateHistoryText(Guid id, string text)
+    {
+        for (var i = 0; i < History.Count; i++)
+        {
+            if (History[i].Id != id) continue;
+            History[i] = History[i] with { Text = text };
+            return;
+        }
+    }
+
+    // MARK: Wörterbuch
+
+    /// <summary>Gibt das Wörterbuch an die Engines weiter (Diktat und Meetings).</summary>
+    private void ApplyVocabulary()
+    {
+        TranscriptionVocabulary.Current = Settings.VocabularyEnabled
+            ? new CustomVocabulary(Settings.VocabularyEntries)
+            : CustomVocabulary.Disabled;
+        OnPropertyChanged(nameof(VocabularyStatus));
+    }
+
+    /// <summary>Stand des Wörterbuchs für Übersicht und Wörterbuch-Seite.</summary>
+    public string VocabularyStatus
+    {
+        get
+        {
+            var n = TranscriptionVocabulary.Current.Entries.Count;
+            return n == 0 ? "Keine Begriffe" : $"{n} {(n == 1 ? "Begriff" : "Begriffe")} aktiv – Schreibweisen werden korrigiert";
+        }
+    }
+
+    /// <summary>Lernt aus einer Korrektur (Verlauf, Meeting). Liefert die Zahl neuer/aktualisierter Vorschläge.</summary>
+    public int LearnFromCorrection(string before, string after)
+    {
+        if (!Settings.VocabularyEnabled) return 0;
+        var (state, changed) = VocabularyLearner.Learn(Settings.VocabularyState, before, after);
+        if (changed > 0) Settings.VocabularyState = state;
+        return changed;
+    }
+
+    public void AcceptSuggestion(VocabularySuggestion suggestion) =>
+        Settings.VocabularyState = VocabularyLearner.Accept(Settings.VocabularyState, suggestion);
+
+    public void IgnoreSuggestion(VocabularySuggestion suggestion) =>
+        Settings.VocabularyState = VocabularyLearner.Ignore(Settings.VocabularyState, suggestion);
 
     // MARK: Helfer
 

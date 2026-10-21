@@ -187,7 +187,12 @@
                 <ControlTemplate TargetType="t:LunaPage">
                     <ScrollViewer x:Name="PART_Scroll" Background="{DynamicResource Luna.Background}" VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled" Focusable="False">
-                        <Grid Margin="28" MaxWidth="820" HorizontalAlignment="Left">
+                        <!-- Inhalt bis 820 px breit, links ausgerichtet (MaxWidth auf der Spalte, damit schmale Seiten trotzdem füllen) -->
+                        <Grid Margin="28">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" MaxWidth="820" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
@@ -612,7 +617,7 @@
                                         Foreground="{DynamicResource Luna.InkMuted}" Margin="0,0,10,0" VerticalAlignment="Center" />
                             <Border x:Name="Badge" DockPanel.Dock="Right" CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={x:Static t:CapsuleRadiusConverter.Instance}}" Background="{DynamicResource Luna.Honey}" Padding="6,1"
                                     VerticalAlignment="Center" Visibility="Collapsed">
-                                <TextBlock Text="{TemplateBinding t:Luna.Badge}" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource Luna.OnAccent}" />
+                                <TextBlock Text="{Binding (t:Luna.Badge), RelativeSource={RelativeSource TemplatedParent}}" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource Luna.OnAccent}" />
                             </Border>
                             <ContentPresenter x:Name="Content" VerticalAlignment="Center" />
                         </DockPanel>
@@ -644,6 +649,42 @@
             <Setter.Value>
                 <ControlTemplate TargetType="ListBoxItem">
                     <ContentPresenter />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Aufklappbarer Bereich (DisclosureGroup) -->
+    <Style TargetType="Expander">
+        <Setter Property="Foreground" Value="{DynamicResource Luna.InkMuted}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Expander">
+                    <StackPanel>
+                        <ToggleButton IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                                      Cursor="Hand" HorizontalAlignment="Left" FocusVisualStyle="{x:Null}">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <StackPanel Orientation="Horizontal" Background="Transparent">
+                                        <t:LunaIcon x:Name="Chevron" Kind="ChevronRight" Size="10" Foreground="{DynamicResource Luna.InkMuted}"
+                                                    VerticalAlignment="Center" Margin="0,1,6,0" />
+                                        <ContentPresenter Content="{Binding Header, RelativeSource={RelativeSource AncestorType=Expander}}" />
+                                    </StackPanel>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter TargetName="Chevron" Property="Kind" Value="ChevronDown" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                        </ToggleButton>
+                        <ContentPresenter x:Name="Body" Visibility="Collapsed" />
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsExpanded" Value="True">
+                            <Setter TargetName="Body" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

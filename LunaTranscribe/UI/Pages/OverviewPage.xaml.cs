@@ -81,6 +81,8 @@ public partial class OverviewPage : UserControl
         Trim(ModelsCard);
         _asrStatus.Status = _state.Models.ToLoadStatus();
         ModelsCard.Children.Add(Row("Spracherkennung", _asrStatus));
+        if (s.VocabularyEnabled && s.VocabularyEntries.Count > 0)
+            ModelsCard.Children.Add(Row("Wörterbuch", new LoadStatusView { Status = new LoadStatus(LoadPhase.Ready, _state.VocabularyStatus) }));
         if (!_state.MicrophoneAllowed)
         {
             var allow = new Button { Content = "Mikrofonzugriff erlauben…", HorizontalAlignment = HorizontalAlignment.Left }.Styled("Luna.Destructive");

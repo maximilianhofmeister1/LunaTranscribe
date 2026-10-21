@@ -79,6 +79,8 @@ public partial class MainWindow : Window
     {
         MainPage.Overview => new OverviewPage(_state),
         MainPage.Settings => new UI.Pages.Settings.SettingsPage(_state),
+        MainPage.Dictionary => new DictionaryPage(_state),
+        MainPage.History => new HistoryPage(_state),
         _ => new PlaceholderPage(page.Title()),
     };
 
