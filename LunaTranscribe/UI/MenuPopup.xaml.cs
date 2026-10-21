@@ -6,42 +6,146 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using LunaCore;
 using LunaTranscribe.Core;
 using LunaTranscribe.Engine;
 using LunaTranscribe.Output;
-using LunaTranscribe.Settings;
-using LunaCore;
+using LunaTranscribe.UI.MainWindow;
+using LunaTranscribe.UI.Theme;
 
 namespace LunaTranscribe.UI;
 
-/// <summary>Das Popover unter dem Tray-Symbol (Pendant zu MenuBarView auf macOS).</summary>
+/// <summary>Das Popover über dem Tray-Symbol (Pendant zu MenuBarView auf macOS).</summary>
 public partial class MenuPopup : Window
 {
     private readonly AppState _state;
-    private readonly Action _openSettings;
     private readonly Action _quit;
     private bool _updating;
 
-    public MenuPopup(AppState state, Action openSettings, Action quit)
+    // Feste Bausteine, deren Inhalt sich ändert
+    private readonly TextBlock _statusLabel = new() { TextTrimming = TextTrimming.CharacterEllipsis };
+    private readonly Spinner _loading = new() { Width = 14, Height = 14, VerticalAlignment = VerticalAlignment.Center };
+    private readonly LunaCard _micWarning = new() { Padding = new Thickness(12) };
+    private readonly ComboBox _language = new() { MinWidth = 120 };
+    private readonly HStack _dictationButtons = new() { Spacing = 6 };
+    private readonly VStack _meetingBody = new() { Spacing = 8 };
+    private readonly LunaCard _historyCard = new() { Padding = new Thickness(12) };
+    private readonly VStack _historyItems = new() { Spacing = 6 };
+
+    public MenuPopup(AppState state, Action quit)
     {
         _state = state;
-        _openSettings = openSettings;
         _quit = quit;
         InitializeComponent();
+        Build();
 
-        EngineBox.ItemsSource = Enum.GetValues<EngineKind>();
         _state.PropertyChanged += OnStateChanged;
         _state.Models.PropertyChanged += OnStateChanged;
-        _state.Settings.PropertyChanged += OnSettingsChanged;
+        _state.Settings.PropertyChanged += OnStateChanged;
         _state.History.CollectionChanged += OnHistoryChanged;
         Deactivated += (_, _) => Hide();
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) Hide(); };
-        RefreshAll();
+        Refresh();
     }
+
+    // MARK: Aufbau
+
+    private void Build()
+    {
+        // Kopf: Icon, Name, Status
+        var header = new DockPanel();
+        var icon = new Image { Source = AppIconArt.Image, Width = 30, Height = 30, Margin = new Thickness(0, 0, 10, 0) };
+        DockPanel.SetDock(icon, Dock.Left);
+        DockPanel.SetDock(_loading, Dock.Right);
+        header.Children.Add(icon);
+        header.Children.Add(_loading);
+        var titles = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        titles.Children.Add(new TextBlock { Text = "LunaTranscribe", FontSize = 18 }.Styled("Luna.Display"));
+        _statusLabel.Styled("Luna.Caption");
+        _statusLabel.FontSize = 11.5;
+        _statusLabel.TextWrapping = TextWrapping.NoWrap;
+        titles.Children.Add(_statusLabel);
+        header.Children.Add(titles);
+        Body.Children.Add(header);
+
+        // Windows-Pendant zur Bedienungshilfen-Warnung: Mikrofon-Datenschutz
+        var warn = new VStack { Spacing = 6 };
+        var warnTitle = new StackPanel { Orientation = Orientation.Horizontal };
+        warnTitle.Children.Add(new LunaIcon { Kind = IconKind.Warning, Size = 13, Margin = new Thickness(0, 1, 6, 0) }.Brushed(LunaIcon.ForegroundProperty, "Luna.Honey"));
+        warnTitle.Children.Add(new TextBlock { Text = "Mikrofonzugriff deaktiviert", FontSize = 12.5, FontWeight = FontWeights.SemiBold }
+            .Brushed(TextBlock.ForegroundProperty, "Luna.Honey"));
+        warn.Children.Add(warnTitle);
+        warn.Children.Add(new TextBlock { Text = "Windows blockiert den Mikrofonzugriff für Desktop-Apps. Ohne ihn kann nichts aufgenommen werden." }.Styled("Luna.Hint"));
+        var open = new Button { Content = "Einstellungen öffnen…", HorizontalAlignment = HorizontalAlignment.Left };
+        open.Click += (_, _) => Permissions.OpenMicrophoneSettings();
+        warn.Children.Add(open);
+        _micWarning.Content = warn;
+        Body.Children.Add(_micWarning);
+
+        // Diktat
+        var dictation = new VStack { Spacing = 10 };
+        var dictHeader = new DockPanel();
+        DockPanel.SetDock(_language, Dock.Right);
+        dictHeader.Children.Add(_language);
+        dictHeader.Children.Add(new TextBlock { Text = "Diktat", FontSize = 14, VerticalAlignment = VerticalAlignment.Center }.Styled("Luna.Title"));
+        _language.ItemTemplate = LanguageTemplate();
+        _language.SelectionChanged += (_, _) =>
+        {
+            if (_updating || _language.SelectedItem is not AppLanguage l) return;
+            _state.Settings.PrimaryLanguage = l;
+        };
+        dictation.Children.Add(dictHeader);
+        dictation.Children.Add(_dictationButtons);
+        Body.Children.Add(new LunaCard { Padding = new Thickness(12), Content = dictation });
+
+        // Meeting
+        var meeting = new VStack { Spacing = 8 };
+        meeting.Children.Add(new TextBlock { Text = "Meeting", FontSize = 14 }.Styled("Luna.Title"));
+        meeting.Children.Add(_meetingBody);
+        Body.Children.Add(new LunaCard { Padding = new Thickness(12), Content = meeting });
+
+        // Zuletzt
+        var history = new VStack { Spacing = 6 };
+        var histHeader = new DockPanel();
+        var all = new Button { Content = "Alle" }.Styled("Luna.Quiet");
+        all.Click += (_, _) => { Hide(); _state.OpenMainWindow(MainPage.History); };
+        DockPanel.SetDock(all, Dock.Right);
+        histHeader.Children.Add(all);
+        histHeader.Children.Add(new TextBlock { Text = "Zuletzt", FontSize = 14, VerticalAlignment = VerticalAlignment.Center }.Styled("Luna.Title"));
+        history.Children.Add(histHeader);
+        history.Children.Add(_historyItems);
+        _historyCard.Content = history;
+        Body.Children.Add(_historyCard);
+
+        // Fuß
+        var footer = new DockPanel { LastChildFill = false };
+        var openMain = new Button { Content = "Öffnen" };
+        Luna.SetIcon(openMain, IconKind.Window);
+        openMain.Click += (_, _) => { Hide(); _state.OpenMainWindow(); };
+        var gear = new Button { ToolTip = "Einstellungen", Padding = new Thickness(9, 7, 9, 7), Margin = new Thickness(6, 0, 0, 0) };
+        Luna.SetIcon(gear, IconKind.Gear);
+        gear.Click += (_, _) => { Hide(); _state.OpenSettings(); };
+        var quit = new Button { Content = "Beenden" }.Styled("Luna.Quiet");
+        quit.Click += (_, _) => _quit();
+        DockPanel.SetDock(quit, Dock.Right);
+        footer.Children.Add(openMain);
+        footer.Children.Add(gear);
+        footer.Children.Add(quit);
+        Body.Children.Add(footer);
+    }
+
+    private static DataTemplate LanguageTemplate()
+    {
+        var factory = new FrameworkElementFactory(typeof(TextBlock));
+        factory.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding { Converter = new LanguageNameConverter() });
+        return new DataTemplate { VisualTree = factory };
+    }
+
+    // MARK: Anzeigen
 
     public void ShowNearTray()
     {
-        RefreshAll();
+        Refresh();
         // Erst anzeigen, damit die Größe bekannt ist, dann in der Nähe des Mauszeigers über der Taskleiste platzieren.
         Opacity = 0;
         Show();
@@ -63,42 +167,36 @@ public partial class MenuPopup : Window
         Activate();
     }
 
-    private void OnStateChanged(object? sender, PropertyChangedEventArgs e) => Dispatcher.BeginInvoke(RefreshStatus);
-    private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e) => Dispatcher.BeginInvoke(RefreshPickers);
-    private void OnHistoryChanged(object? sender, NotifyCollectionChangedEventArgs e) => Dispatcher.BeginInvoke(RefreshHistory);
-
-    private void RefreshAll()
+    private void OnStateChanged(object? sender, PropertyChangedEventArgs e)
     {
-        RefreshPickers();
-        RefreshStatus();
+        if (e.PropertyName == nameof(AppState.InputLevel)) return;
+        Dispatcher.BeginInvoke(Refresh);
+    }
+
+    private void OnHistoryChanged(object? sender, NotifyCollectionChangedEventArgs e) => Dispatcher.BeginInvoke(Refresh);
+
+    private void Refresh()
+    {
+        if (!IsVisible && IsLoaded) return;   // unsichtbar: beim nächsten Öffnen
+        _statusLabel.Text = StatusText();
+        _loading.Visibility = _state.Models.State.Kind == ModelStateKind.Loading ? Visibility.Visible : Visibility.Collapsed;
+        _micWarning.Visibility = _state.MicrophoneAllowed ? Visibility.Collapsed : Visibility.Visible;
+        RefreshLanguage();
+        RefreshDictationButtons();
+        RefreshMeeting();
         RefreshHistory();
     }
 
-    private void RefreshStatus()
-    {
-        StatusLabel.Text = _state.StatusText;
-        var models = _state.Models.State.Kind;
-        StatusDot.Fill = _state.IsRecording ? (Brush)FindResource("RecordingBrush")
-            : models == ModelStateKind.Failed ? (Brush)FindResource("RecordingBrush")
-            : models == ModelStateKind.Loading ? (Brush)FindResource("TertiaryTextBrush")
-            : (Brush)FindResource("OkBrush");
-
-        MicWarning.Visibility = _state.MicrophoneAllowed ? Visibility.Collapsed : Visibility.Visible;
-        ToggleButton.Content = _state.IsRecording ? "Aufnahme stoppen" : "Aufnahme starten";
-        ToggleButton.IsEnabled = _state.IsRecording || _state.CanStartRecording;
-        CancelButton.Visibility = _state.IsBusy ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    private void RefreshPickers()
+    private void RefreshLanguage()
     {
         _updating = true;
         try
         {
             var settings = _state.Settings;
             var languages = AppLanguageExtensions.Supported(settings.Engine);
-            if (!Equals(LanguageBox.ItemsSource, languages)) LanguageBox.ItemsSource = languages;
-            LanguageBox.SelectedItem = languages.Contains(settings.PrimaryLanguage) ? settings.PrimaryLanguage : AppLanguage.English;
-            EngineBox.SelectedItem = settings.Engine;
+            if (_language.ItemsSource is not System.Collections.Generic.List<AppLanguage> current || !current.SequenceEqual(languages))
+                _language.ItemsSource = languages;
+            _language.SelectedItem = languages.Contains(settings.PrimaryLanguage) ? settings.PrimaryLanguage : AppLanguage.English;
         }
         finally
         {
@@ -106,63 +204,92 @@ public partial class MenuPopup : Window
         }
     }
 
+    private void RefreshDictationButtons()
+    {
+        _dictationButtons.Children.Clear();
+        if (_state.IsRecording)
+        {
+            var stop = new Button { Content = "Stopp" }.Styled("Luna.Primary");
+            Luna.SetIcon(stop, IconKind.Stop);
+            stop.Click += (_, _) => { Hide(); _state.ToggleRecordingFromMenu(); };
+            _dictationButtons.Children.Add(stop);
+        }
+        else
+        {
+            var canDictate = _state.CanStartRecording && !_state.IsBusy;
+            var start = new Button { Content = "Starten", IsEnabled = canDictate }.Styled("Luna.Primary");
+            Luna.SetIcon(start, IconKind.Mic);
+            // Popover schließen, damit der Fokus (und damit Strg+V) wieder in der vorherigen App landet.
+            start.Click += (_, _) => { Hide(); _state.ToggleRecordingFromMenu(); };
+            var refine = new Button { Content = "Nachbearbeiten", IsEnabled = canDictate, ToolTip = "Diktat wird vom Sprachmodell bereinigt (wie Hotkey 3)" };
+            Luna.SetIcon(refine, IconKind.Sparkles);
+            refine.Click += (_, _) => { Hide(); _state.ToggleRecordingFromMenu(refine: true); };
+            _dictationButtons.Children.Add(start);
+            _dictationButtons.Children.Add(refine);
+        }
+        if (_state.IsBusy)
+        {
+            var cancel = new Button { ToolTip = "Abbrechen (Esc)" }.Styled("Luna.Quiet");
+            Luna.SetIcon(cancel, IconKind.Close);
+            cancel.Click += (_, _) => _state.Cancel();
+            _dictationButtons.Children.Add(cancel);
+        }
+    }
+
+    /// <summary>Meeting: Start/Stopp und Laufzeit; darunter die Hintergrund-Verarbeitung beendeter Meetings.</summary>
+    private void RefreshMeeting()
+    {
+        _meetingBody.Children.Clear();
+        var start = new Button { Content = "Starten", HorizontalAlignment = HorizontalAlignment.Left };
+        Luna.SetIcon(start, IconKind.People);
+        start.Click += (_, _) => _state.ToggleMeetingFromMenu();
+        _meetingBody.Children.Add(start);
+    }
+
     private void RefreshHistory()
     {
-        var items = _state.History.Take(5).ToList();
-        HistoryList.ItemsSource = items;
-        HistoryPanel.Visibility = items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        _historyItems.Children.Clear();
+        var items = _state.History.Take(3).ToList();
+        _historyCard.Visibility = _state.Settings.KeepHistory && items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var t in items)
+        {
+            var row = new DockPanel { Background = Brushes.Transparent, Cursor = Cursors.Hand };
+            if (t.RawText != null)
+            {
+                var sparkle = new LunaIcon { Kind = IconKind.Sparkles, Size = 10, Margin = new Thickness(0, 0, 6, 0) }.Brushed(LunaIcon.ForegroundProperty, "Luna.Lavender");
+                DockPanel.SetDock(sparkle, Dock.Left);
+                row.Children.Add(sparkle);
+            }
+            var copy = new LunaIcon { Kind = IconKind.Copy, Size = 11, Margin = new Thickness(6, 0, 0, 0) }.Brushed(LunaIcon.ForegroundProperty, "Luna.InkMuted");
+            DockPanel.SetDock(copy, Dock.Right);
+            row.Children.Add(copy);
+            var text = new TextBlock { Text = t.Text, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis }.Brushed(TextBlock.ForegroundProperty, "Luna.Ink");
+            row.Children.Add(text);
+            row.ToolTip = t.RawText != null ? "Klicken kopiert den Text\n\nRohtext: " + t.RawText : "Klicken kopiert den Text";
+            row.MouseLeftButtonUp += (_, _) => UiHelpers.CopyToClipboard(t.Text);
+            _historyItems.Children.Add(row);
+        }
     }
 
-    private void LanguageBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private string StatusText()
     {
-        if (_updating || LanguageBox.SelectedItem is not AppLanguage l) return;
-        _state.Settings.PrimaryLanguage = l;
+        if (!_state.Models.IsReady && _state.Models.State.Kind != ModelStateKind.Unloaded && _state.Status == StatusKind.Idle)
+            return _state.Models.StatusText;
+        return _state.Status switch
+        {
+            StatusKind.Recording => "Ich höre zu …",
+            StatusKind.Transcribing => "Transkribiere …",
+            StatusKind.Refining => "Formuliere …",
+            StatusKind.Notice => _state.NoticeText,
+            _ => _state.MeetingRecording ? "Meeting läuft" : "Bereit · alles lokal",
+        };
     }
-
-    private void EngineBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_updating || EngineBox.SelectedItem is not EngineKind k) return;
-        var s = _state.Settings;
-        s.Engine = k;
-        // Sprachen ggf. auf etwas Unterstütztes zurücksetzen
-        if (!s.PrimaryLanguage.IsSupported(k)) s.PrimaryLanguage = AppLanguage.English;
-        if (!s.SecondaryLanguage.IsSupported(k)) s.SecondaryLanguage = AppLanguage.English;
-        RefreshPickers();
-    }
-
-    private void Toggle_Click(object sender, RoutedEventArgs e)
-    {
-        // Popover schließen, damit der Fokus (und damit Strg+V) wieder in der vorherigen App landet.
-        Hide();
-        _state.ToggleRecordingFromMenu();
-    }
-
-    private void Cancel_Click(object sender, RoutedEventArgs e) => _state.Cancel();
-
-    private void ClearHistory_Click(object sender, RoutedEventArgs e) => _state.ClearHistory();
-
-    private void HistoryItem_Click(object sender, RoutedEventArgs e)
-    {
-        if ((sender as FrameworkElement)?.Tag is not Transcript t) return;
-        try { Clipboard.SetDataObject(t.Text, true); }
-        catch (Exception ex) { Log.Write("copy failed: " + ex.Message); }
-    }
-
-    private void OpenMicSettings_Click(object sender, RoutedEventArgs e) => Permissions.OpenMicrophoneSettings();
-
-    private void Settings_Click(object sender, RoutedEventArgs e)
-    {
-        Hide();
-        _openSettings();
-    }
-
-    private void Quit_Click(object sender, RoutedEventArgs e) => _quit();
 
     protected override void OnClosing(CancelEventArgs e)
     {
         _state.PropertyChanged -= OnStateChanged;
         _state.Models.PropertyChanged -= OnStateChanged;
-        _state.Settings.PropertyChanged -= OnSettingsChanged;
+        _state.Settings.PropertyChanged -= OnStateChanged;
         _state.History.CollectionChanged -= OnHistoryChanged;
         base.OnClosing(e);
     }

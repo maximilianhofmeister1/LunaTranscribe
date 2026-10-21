@@ -58,6 +58,8 @@ public sealed class SettingsStore : INotifyPropertyChanged
         public int UnloadAfterMinutes { get; set; } = 10;
         public Hotkey PrimaryHotkey { get; set; } = Hotkey.DefaultPrimary;
         public Hotkey SecondaryHotkey { get; set; } = Hotkey.None;
+        public string MainWindowPlacement { get; set; } = "";
+        public DailyDictationStats DailyDictationStats { get; set; } = new();
     }
 
     private readonly Data _d;
@@ -164,6 +166,20 @@ public sealed class SettingsStore : INotifyPropertyChanged
     {
         get => _d.SecondaryHotkey;
         set { if (Equals(_d.SecondaryHotkey, value)) return; _d.SecondaryHotkey = value ?? Hotkey.None; Changed(); }
+    }
+
+    /// <summary>Position und Größe des Hauptfensters („x,y,b,h,normal|max“), "" = zentriert.</summary>
+    public string MainWindowPlacement
+    {
+        get => _d.MainWindowPlacement;
+        set { if (_d.MainWindowPlacement == value) return; _d.MainWindowPlacement = value ?? ""; Changed(); }
+    }
+
+    /// <summary>Tageszähler für die Übersicht – nur Datum und zwei Zahlen, kein Text.</summary>
+    public DailyDictationStats DailyDictationStats
+    {
+        get => _d.DailyDictationStats;
+        set { _d.DailyDictationStats = value; Changed(); }
     }
 
     // MARK: Autostart

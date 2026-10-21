@@ -6,3 +6,4 @@ obj/
 publish/
 build/
 *.log
+.claude/

@@ -48,9 +48,11 @@ public sealed class HotkeyRecorder : Control
         _label = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 4, 0) };
         _clear = new Button
         {
-            Content = "✕", FontSize = 10, Padding = new Thickness(6, 1, 6, 1), MinHeight = 0,
+            Content = null, Padding = new Thickness(6, 4, 6, 4), MinHeight = 0,
             Margin = new Thickness(0, 2, 2, 2), Focusable = false, ToolTip = "Hotkey entfernen",
         };
+        _clear.SetResourceReference(StyleProperty, "Luna.Quiet");
+        UI.Theme.Luna.SetIcon(_clear, UI.Theme.IconKind.Close);
         _clear.Click += (_, _) => { Hotkey = Hotkeys.Hotkey.None; };
         var dock = new DockPanel();
         DockPanel.SetDock(_clear, Dock.Right);
@@ -58,13 +60,15 @@ public sealed class HotkeyRecorder : Control
         dock.Children.Add(_label);
         _border = new Border
         {
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD6)),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(5),
-            Background = Brushes.White,
-            MinHeight = 28,
+            CornerRadius = new CornerRadius(8),
+            MinHeight = 30,
             Child = dock,
         };
+        _border.SetResourceReference(Border.BackgroundProperty, "Luna.Surface");
+        _label.SetResourceReference(TextBlock.FontFamilyProperty, "Luna.Font.Text");
+        _label.FontSize = 13;
+        _label.FontWeight = FontWeights.Medium;
         AddVisualChild(_border);
         AddLogicalChild(_border);
 
@@ -128,12 +132,8 @@ public sealed class HotkeyRecorder : Control
         var hk = Hotkey;
         var capturing = IsKeyboardFocused;
         _label.Text = capturing ? "Taste drücken…" : (hk is { IsSet: true } ? hk.DisplayName : "Kein Hotkey");
-        _label.Foreground = capturing || hk is not { IsSet: true }
-            ? new SolidColorBrush(Color.FromRgb(0x8A, 0x8A, 0x8A))
-            : Brushes.Black;
-        _border.BorderBrush = capturing
-            ? new SolidColorBrush(Color.FromRgb(0x3A, 0x42, 0x78))
-            : new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD6));
+        _label.SetResourceReference(TextBlock.ForegroundProperty, capturing || hk is not { IsSet: true } ? "Luna.InkMuted" : "Luna.Ink");
+        _border.SetResourceReference(Border.BorderBrushProperty, capturing ? "Luna.Lavender" : "Luna.Stroke");
         _clear.Visibility = AllowEmpty && hk is { IsSet: true } && !capturing ? Visibility.Visible : Visibility.Collapsed;
     }
 }

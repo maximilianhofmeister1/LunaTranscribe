@@ -17,6 +17,7 @@ public partial class App : Application
     private AppState? _state;
     private TrayIcon? _tray;
     private OverlayWindow? _overlay;
+    private UI.MainWindow.MainWindow? _main;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -26,6 +27,7 @@ public partial class App : Application
         if (SelfTests.IsRequested(e.Args))
         {
             DispatcherUnhandledException += OnUnhandledException;
+            UI.Theme.LunaTheme.Install(Resources);
             Dispatcher.BeginInvoke(async () => Shutdown(await SelfTests.RunAsync(e.Args)));
             return;
         }
@@ -41,6 +43,7 @@ public partial class App : Application
         }
 
         DispatcherUnhandledException += OnUnhandledException;
+        UI.Theme.LunaTheme.Install(Resources);
         AppDomain.CurrentDomain.UnhandledException += (_, args) => Log.Write("fatal: " + args.ExceptionObject);
         Log.Write("start v" + typeof(App).Assembly.GetName().Version);
 
@@ -59,6 +62,21 @@ public partial class App : Application
 
         _overlay = new OverlayWindow(_state);
         _tray = new TrayIcon(_state, QuitFromTray);
+        _state.ShowMainWindow = ShowMainWindow;
+    }
+
+    /// <summary>Hauptfenster öffnen bzw. nach vorne holen. Die App bleibt eine Infobereich-App: Schließen beendet sie nicht.</summary>
+    private void ShowMainWindow()
+    {
+        if (_state == null) return;
+        if (_main == null)
+        {
+            _main = new UI.MainWindow.MainWindow(_state);
+            _main.Closed += (_, _) => _main = null;
+        }
+        if (_main.WindowState == WindowState.Minimized) _main.WindowState = WindowState.Normal;
+        _main.Show();
+        _main.Activate();
     }
 
     private void QuitFromTray() => Shutdown();

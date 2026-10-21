@@ -4,128 +4,17 @@
              xmlns:ui="clr-namespace:LunaTranscribe.UI"
              ShutdownMode="OnExplicitShutdown">
     <Application.Resources>
-        <ui:BoolToVisibilityConverter x:Key="BoolToVisibility" />
-        <ui:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
-        <ui:NullToVisibilityConverter x:Key="NullToVisibility" />
-        <ui:LanguageNameConverter x:Key="LanguageName" />
-        <ui:EngineLabelConverter x:Key="EngineLabel" />
-        <ui:EngineShortLabelConverter x:Key="EngineShortLabel" />
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="UI/Theme/Styles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
 
-        <SolidColorBrush x:Key="AccentBrush" Color="#3A4278" />
-        <SolidColorBrush x:Key="AccentLightBrush" Color="#E8EAF6" />
-        <SolidColorBrush x:Key="SecondaryTextBrush" Color="#6B6B6B" />
-        <SolidColorBrush x:Key="TertiaryTextBrush" Color="#9A9A9A" />
-        <SolidColorBrush x:Key="DividerBrush" Color="#E3E3E3" />
-        <SolidColorBrush x:Key="RecordingBrush" Color="#E53935" />
-        <SolidColorBrush x:Key="OkBrush" Color="#2E9E5B" />
-        <SolidColorBrush x:Key="WarnBrush" Color="#E08A00" />
-
-        <Style TargetType="TextBlock" x:Key="Caption">
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-        </Style>
-
-        <Style TargetType="TextBlock" x:Key="SectionHeader">
-            <Setter Property="FontSize" Value="13" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Margin" Value="0,0,0,8" />
-        </Style>
-
-        <Style TargetType="Border" x:Key="Card">
-            <Setter Property="Background" Value="White" />
-            <Setter Property="BorderBrush" Value="{StaticResource DividerBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="Padding" Value="14,12" />
-            <Setter Property="Margin" Value="0,0,0,12" />
-        </Style>
-
-        <Style TargetType="Button">
-            <Setter Property="Padding" Value="12,5" />
-            <Setter Property="MinHeight" Value="28" />
-            <Setter Property="Background" Value="#F4F4F6" />
-            <Setter Property="BorderBrush" Value="#D0D0D6" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Foreground" Value="#1F1F1F" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#E9E9EE" />
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#DCDCE3" />
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Foreground" Value="#9A9A9A" />
-                                <Setter TargetName="Bd" Property="Background" Value="#F8F8F8" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style TargetType="Button" x:Key="PrimaryButton" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="{StaticResource AccentBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
-            <Setter Property="Foreground" Value="White" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#4B5493" />
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bd" Property="Background" Value="#B7BAD0" />
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#B7BAD0" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style TargetType="Button" x:Key="LinkButton">
-            <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <ContentPresenter />
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style TargetType="CheckBox">
-            <Setter Property="Margin" Value="0,3" />
-            <Setter Property="VerticalContentAlignment" Value="Center" />
-        </Style>
-        <Style TargetType="RadioButton">
-            <Setter Property="Margin" Value="0,3" />
-            <Setter Property="VerticalContentAlignment" Value="Center" />
-        </Style>
-        <Style TargetType="ComboBox">
-            <Setter Property="MinHeight" Value="26" />
-            <Setter Property="VerticalContentAlignment" Value="Center" />
-        </Style>
+            <ui:BoolToVisibilityConverter x:Key="BoolToVisibility" />
+            <ui:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
+            <ui:NullToVisibilityConverter x:Key="NullToVisibility" />
+            <ui:LanguageNameConverter x:Key="LanguageName" />
+            <ui:EngineLabelConverter x:Key="EngineLabel" />
+            <ui:EngineShortLabelConverter x:Key="EngineShortLabel" />
+        </ResourceDictionary>
     </Application.Resources>
 </Application>

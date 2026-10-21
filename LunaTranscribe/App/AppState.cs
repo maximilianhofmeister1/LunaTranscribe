@@ -10,16 +10,20 @@ using LunaTranscribe.Engine;
 using LunaTranscribe.Hotkeys;
 using LunaTranscribe.Output;
 using LunaTranscribe.Settings;
+using LunaTranscribe.UI.MainWindow;
 using LunaCore;
 
 namespace LunaTranscribe.Core;
 
 public sealed record Transcript(DateTime Date, string Text, AppLanguage Language, double DurationSeconds, double ProcessingSeconds)
 {
+    public Guid Id { get; init; } = Guid.NewGuid();
+    /// <summary>Rohtext vor der Nachbearbeitung; null = nicht nachbearbeitet.</summary>
+    public string? RawText { get; init; }
     public string ProcessingLabel => $"{ProcessingSeconds:0.0}s";
 }
 
-public enum StatusKind { Idle, Recording, Transcribing, Notice }
+public enum StatusKind { Idle, Recording, Transcribing, Refining, Notice }
 
 /// <summary>Zentraler Zustand der App. Verbindet Hotkeys, Aufnahme, Engine und Texteinfügen. Läuft auf dem UI-Thread.</summary>
 public sealed class AppState : INotifyPropertyChanged, IDisposable
@@ -29,6 +33,10 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
     public SettingsStore Settings { get; } = SettingsStore.Shared;
     public ModelManager Models { get; }
     public ObservableCollection<Transcript> History { get; } = new();
+    public MainRouter Router { get; } = new();
+
+    /// <summary>Zeigt das Hauptfenster (setzt App beim Start).</summary>
+    public Action? ShowMainWindow { get; set; }
 
     private readonly Dispatcher _dispatcher;
     private readonly AudioRecorder _recorder = new();
@@ -48,8 +56,10 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
     private int _transcriptionGeneration;
     private bool _starting;
 
-    public AppState(Dispatcher dispatcher)
+    /// <param name="interactive">false = Selbsttests: kein Tastatur-Hook, keine vorgeladenen Modelle, keine Hintergrund-Timer.</param>
+    public AppState(Dispatcher dispatcher, bool interactive = true)
     {
+        Interactive = interactive;
         _dispatcher = dispatcher;
         Models = new ModelManager(dispatcher);
         Models.PropertyChanged += (_, e) =>
@@ -65,7 +75,7 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         _hook.HotkeyDown += HotkeyDown;
         _hook.HotkeyUp += HotkeyUp;
         _hook.EscapeDown += () => { if (Status != StatusKind.Idle) Cancel(); };
-        _hook.Install();
+        if (interactive) _hook.Install();
 
         Settings.PropertyChanged += (_, e) =>
         {
@@ -81,7 +91,7 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         // Modell direkt beim Start laden, damit der erste Hotkey sofort reagiert.
         Models.CanUnload = () => Status == StatusKind.Idle;
         Models.UnloadAfter = TimeSpan.FromMinutes(Settings.UnloadAfterMinutes);
-        Models.EnsureLoaded(Settings.Engine);
+        if (interactive) Models.EnsureLoaded(Settings.Engine);
 
         _levelTimer = new DispatcherTimer(DispatcherPriority.Render, dispatcher) { Interval = TimeSpan.FromMilliseconds(50) };
         _levelTimer.Tick += (_, _) => InputLevel = _recorder.Level;
@@ -89,11 +99,14 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         // Mikrofon-Datenschutz regelmäßig prüfen (ändert sich in den Windows-Einstellungen).
         _permissionTimer = new DispatcherTimer(DispatcherPriority.Background, dispatcher) { Interval = TimeSpan.FromSeconds(2) };
         _permissionTimer.Tick += (_, _) => MicrophoneAllowed = Permissions.MicrophoneAllowed;
-        _permissionTimer.Start();
+        if (interactive) _permissionTimer.Start();
 
         // Medien-Steuerung (WinRT) im Hintergrund vorwärmen, damit der erste Hotkey nicht darauf wartet.
-        _ = Task.Run(_media.WarmUpAsync);
+        if (interactive) _ = Task.Run(_media.WarmUpAsync);
     }
+
+    /// <summary>false in Selbsttests (kein Hook, keine Modelle).</summary>
+    public bool Interactive { get; }
 
     /// <summary>Wird von der UI gesetzt, solange der Hotkey-Recorder den Fokus hat.</summary>
     public bool HotkeysSuspended
@@ -115,6 +128,7 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
             OnPropertyChanged(nameof(StatusText));
             OnPropertyChanged(nameof(IsRecording));
             OnPropertyChanged(nameof(IsTranscribing));
+            OnPropertyChanged(nameof(IsRefining));
             OnPropertyChanged(nameof(IsIdle));
             OnPropertyChanged(nameof(IsBusy));
             OnPropertyChanged(nameof(CanStartRecording));
@@ -149,10 +163,11 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
     }
 
     /// <summary>Aufnahme kann starten: Modell bereit oder lokal vorhanden (lädt dann parallel zur Aufnahme).</summary>
-    public bool CanStartRecording => Models.CanRecord && Status != StatusKind.Transcribing;
+    public bool CanStartRecording => Models.CanRecord && Status is not (StatusKind.Transcribing or StatusKind.Refining);
 
     public bool IsRecording => Status == StatusKind.Recording;
     public bool IsTranscribing => Status == StatusKind.Transcribing;
+    public bool IsRefining => Status == StatusKind.Refining;
     public bool IsIdle => Status == StatusKind.Idle;
     public bool IsBusy => Status != StatusKind.Idle;
 
@@ -166,10 +181,47 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
             {
                 StatusKind.Recording => "Aufnahme läuft",
                 StatusKind.Transcribing => TranscribingLabel,
+                StatusKind.Refining => "Formuliere…",
                 StatusKind.Notice => NoticeText,
                 _ => Models.StatusText,
             };
         }
+    }
+
+    // MARK: Hauptfenster
+
+    public void OpenMainWindow(MainPage? page = null)
+    {
+        if (page is { } p) Router.Page = p;
+        ShowMainWindow?.Invoke();
+    }
+
+    public void OpenSettings(SettingsSection? section = null)
+    {
+        if (section is { } s) Router.SettingsSection = s;
+        OpenMainWindow(MainPage.Settings);
+    }
+
+    public void OpenMeeting(Guid id)
+    {
+        Router.SelectedMeetingId = id;
+        OpenMainWindow(MainPage.Meetings);
+    }
+
+    // MARK: Meeting & Wörterbuch (Platzhalter bis zur Integration)
+
+    public int SuggestionCount => 0;
+    public bool MeetingRecording => false;
+    public string MeetingElapsedText => "";
+    public int MeetingsPending => 0;
+    public int MeetingCount => 0;
+    public void ToggleMeetingFromMenu() { }
+
+    /// <summary>Nur für UI-Snapshots: zeigt einen Zustand, ohne aufzunehmen.</summary>
+    internal void PreviewStatus(StatusKind status, string notice = "")
+    {
+        NoticeText = notice;
+        Status = status;
     }
 
     // MARK: Abbrechen (Escape / X im Overlay)
@@ -187,6 +239,7 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
                 Status = StatusKind.Idle;
                 break;
             case StatusKind.Transcribing:
+            case StatusKind.Refining:
                 _transcriptionGeneration++;   // laufendes Ergebnis wird ignoriert
                 Status = StatusKind.Idle;
                 break;
@@ -226,7 +279,8 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
 
     // MARK: Aufnahme
 
-    public void ToggleRecordingFromMenu()
+    /// <param name="refine">Diktat mit Nachbearbeitung (wie Hotkey 3).</param>
+    public void ToggleRecordingFromMenu(bool refine = false)
     {
         if (Status == StatusKind.Recording) StopRecordingAndTranscribe();
         else StartRecording(LanguageFor(HotkeySlot.Primary));
@@ -354,6 +408,7 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
                 History.Insert(0, new Transcript(DateTime.Now, text, language, duration, elapsed));
                 while (History.Count > 20) History.RemoveAt(History.Count - 1);
             }
+            Settings.DailyDictationStats = Settings.DailyDictationStats.Adding(DailyDictationStats.CountWords(text));
             await TextInjector.InsertAsync(text);
         }
         catch (Exception ex)

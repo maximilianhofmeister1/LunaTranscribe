@@ -2,7 +2,6 @@ using System;
 using System.ComponentModel;
 using LunaTranscribe.Core;
 using LunaTranscribe.Engine;
-using LunaTranscribe.Settings;
 using Microsoft.Win32;
 using SD = System.Drawing;
 using WF = System.Windows.Forms;
@@ -22,7 +21,6 @@ public sealed class TrayIcon : IDisposable
     private readonly WF.ToolStripMenuItem _toggleItem;
     private readonly WF.ToolStripMenuItem _cancelItem;
     private MenuPopup? _popup;
-    private SettingsWindow? _settings;
     private TrayIconKind _currentKind = (TrayIconKind)(-1);
     private bool _lightTaskbar;
 
@@ -38,7 +36,8 @@ public sealed class TrayIcon : IDisposable
         _menu.Items.Add(_toggleItem);
         _menu.Items.Add(_cancelItem);
         _menu.Items.Add(new WF.ToolStripSeparator());
-        _menu.Items.Add(new WF.ToolStripMenuItem("Einstellungen…", null, (_, _) => OpenSettings()));
+        _menu.Items.Add(new WF.ToolStripMenuItem("LunaTranscribe öffnen", null, (_, _) => _state.OpenMainWindow()));
+        _menu.Items.Add(new WF.ToolStripMenuItem("Einstellungen…", null, (_, _) => _state.OpenSettings()));
         _menu.Items.Add(new WF.ToolStripSeparator());
         _menu.Items.Add(new WF.ToolStripMenuItem("Beenden", null, (_, _) => _quit()));
         _menu.Opening += (_, _) => RefreshMenu();
@@ -55,7 +54,7 @@ public sealed class TrayIcon : IDisposable
         };
         _icon.MouseDoubleClick += (_, e) =>
         {
-            if (e.Button == WF.MouseButtons.Left) OpenSettings();
+            if (e.Button == WF.MouseButtons.Left) { _popup?.Hide(); _state.OpenMainWindow(); }
         };
 
         _state.PropertyChanged += OnStateChanged;
@@ -107,21 +106,9 @@ public sealed class TrayIcon : IDisposable
 
     private void TogglePopup()
     {
-        _popup ??= new MenuPopup(_state, OpenSettings, _quit);
+        _popup ??= new MenuPopup(_state, _quit);
         if (_popup.IsVisible) _popup.Hide();
         else _popup.ShowNearTray();
-    }
-
-    public void OpenSettings()
-    {
-        _popup?.Hide();
-        if (_settings == null || !_settings.IsLoaded)
-        {
-            _settings = new SettingsWindow(_state);
-            _settings.Closed += (_, _) => _settings = null;
-        }
-        _settings.Show();
-        _settings.Activate();
     }
 
     private static bool TaskbarIsLight()
@@ -140,7 +127,6 @@ public sealed class TrayIcon : IDisposable
         _state.PropertyChanged -= OnStateChanged;
         _state.Models.PropertyChanged -= OnStateChanged;
         _popup?.Close();
-        _settings?.Close();
         _icon.Visible = false;
         _icon.Icon?.Dispose();
         _icon.Dispose();

@@ -2,38 +2,28 @@ using System;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
-using System.Windows.Shapes;
 using LunaTranscribe.Core;
 
 namespace LunaTranscribe.UI;
 
 /// <summary>
-/// Kleines schwebendes Fenster am unteren Bildschirmrand, das Aufnahme / Verarbeitung anzeigt.
-/// Nimmt nie den Fokus (WS_EX_NOACTIVATE) – sonst würde Strg+V im falschen Fenster landen.
+/// Kleine schwebende Pille am unteren Bildschirmrand, die Aufnahme und Verarbeitung anzeigt
+/// („Ich höre zu…“, „Transkribiere…“, „Formuliere…“). Nimmt nie den Fokus (WS_EX_NOACTIVATE) –
+/// sonst würde Strg+V im falschen Fenster landen.
 /// </summary>
 public partial class OverlayWindow : Window
 {
-    private const int Bars = 8;
     private readonly AppState _state;
-    private readonly Rectangle[] _bars = new Rectangle[Bars];
-    private readonly Brush _barOn = new SolidColorBrush(Color.FromRgb(0x4C, 0xD9, 0x64));
-    private readonly Brush _barOff = new SolidColorBrush(Color.FromArgb(0x55, 0xFF, 0xFF, 0xFF));
-    private readonly DoubleAnimation _spin = new(0, 360, TimeSpan.FromSeconds(1)) { RepeatBehavior = RepeatBehavior.Forever };
+    private readonly DoubleAnimation _pulse = new(1, 0.35, TimeSpan.FromSeconds(0.8)) { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever };
     private bool _shownOnce;
 
     public OverlayWindow(AppState state)
     {
         _state = state;
         InitializeComponent();
-        for (var i = 0; i < Bars; i++)
-        {
-            _bars[i] = new Rectangle { Width = 3, Height = 12, RadiusX = 1, RadiusY = 1, Fill = _barOff, Margin = new Thickness(1, 0, 1, 0) };
-            LevelMeter.Children.Add(_bars[i]);
-        }
         _state.PropertyChanged += OnStateChanged;
         Apply();
     }
@@ -56,7 +46,7 @@ public partial class OverlayWindow : Window
                 Apply();
                 break;
             case nameof(AppState.InputLevel):
-                UpdateLevel(_state.InputLevel);
+                Waveform.Level = _state.InputLevel;
                 break;
         }
     }
@@ -67,21 +57,35 @@ public partial class OverlayWindow : Window
         if (status == StatusKind.Idle)
         {
             if (IsVisible) Hide();
-            SpinnerRotate.BeginAnimation(RotateTransform.AngleProperty, null);
+            StopAnimations();
             return;
         }
 
-        RecordingPanel.Visibility = status == StatusKind.Recording ? Visibility.Visible : Visibility.Collapsed;
-        TranscribingPanel.Visibility = status == StatusKind.Transcribing ? Visibility.Visible : Visibility.Collapsed;
-        NoticePanel.Visibility = status == StatusKind.Notice ? Visibility.Visible : Visibility.Collapsed;
-        NoticeLabel.Text = _state.NoticeText;
-        TranscribingLabel.Text = _state.TranscribingLabel;
-        if (status == StatusKind.Transcribing) SpinnerRotate.BeginAnimation(RotateTransform.AngleProperty, _spin);
-        else SpinnerRotate.BeginAnimation(RotateTransform.AngleProperty, null);
-        if (status != StatusKind.Recording) UpdateLevel(0);
+        RecordingIndicator.Visibility = status == StatusKind.Recording ? Visibility.Visible : Visibility.Collapsed;
+        TranscribingIndicator.Visibility = status == StatusKind.Transcribing ? Visibility.Visible : Visibility.Collapsed;
+        RefiningIndicator.Visibility = status == StatusKind.Refining ? Visibility.Visible : Visibility.Collapsed;
+        NoticeIndicator.Visibility = status == StatusKind.Notice ? Visibility.Visible : Visibility.Collapsed;
+        Label.Text = status switch
+        {
+            StatusKind.Recording => "Ich höre zu…",
+            StatusKind.Transcribing => _state.TranscribingLabel,
+            StatusKind.Refining => "Formuliere…",
+            StatusKind.Notice => _state.NoticeText,
+            _ => "",
+        };
+        StopAnimations();
+        if (status == StatusKind.Transcribing) TranscribingIndicator.BeginAnimation(OpacityProperty, _pulse);
+        if (status == StatusKind.Refining) RefiningIndicator.BeginAnimation(OpacityProperty, _pulse);
+        if (status != StatusKind.Recording) Waveform.Level = 0;
 
         ShowNonActivating();
         Dispatcher.BeginInvoke(Reposition, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private void StopAnimations()
+    {
+        TranscribingIndicator.BeginAnimation(OpacityProperty, null);
+        RefiningIndicator.BeginAnimation(OpacityProperty, null);
     }
 
     private void ShowNonActivating()
@@ -100,7 +104,7 @@ public partial class OverlayWindow : Window
             SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
     }
 
-    /// <summary>Unten mittig auf dem Bildschirm mit dem aktiven Fenster, 60 px über der Taskleiste.</summary>
+    /// <summary>Unten mittig auf dem Bildschirm mit dem aktiven Fenster, knapp über der Taskleiste.</summary>
     private void Reposition()
     {
         UpdateLayout();
@@ -110,13 +114,7 @@ public partial class OverlayWindow : Window
         var w = ActualWidth * dpi.DpiScaleX;
         var h = ActualHeight * dpi.DpiScaleY;
         Left = (wa.Left + (wa.Width - w) / 2) / dpi.DpiScaleX;
-        Top = (wa.Bottom - h - 60 * dpi.DpiScaleY) / dpi.DpiScaleY;
-    }
-
-    private void UpdateLevel(float level)
-    {
-        for (var i = 0; i < Bars; i++)
-            _bars[i].Fill = (float)i / Bars < level ? _barOn : _barOff;
+        Top = (wa.Bottom - h - 28 * dpi.DpiScaleY) / dpi.DpiScaleY;
     }
 
     private void Close_Click(object sender, RoutedEventArgs e) => _state.Cancel();
