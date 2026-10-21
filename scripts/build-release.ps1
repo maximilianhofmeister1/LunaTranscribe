@@ -19,6 +19,8 @@ if ($LASTEXITCODE -ne 0) { Write-Error "Build fehlgeschlagen"; exit 1 }
 
 Write-Host "> Laufende Instanz beenden"
 Get-Process -Name $AppName -ErrorAction SilentlyContinue | Stop-Process -Force
+# luna-mcp läuft ggf. als Kindprozess von Claude Code/Desktop; Claude startet ihn bei Bedarf neu.
+Get-Process -Name "luna-mcp" -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Milliseconds 500
 
 Write-Host "> Installieren nach $Dest"

@@ -141,15 +141,18 @@ public partial class OverviewPage : UserControl
 
     private static FrameworkElement Row(string label, FrameworkElement content)
     {
-        var dock = new DockPanel { LastChildFill = false };
-        var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) }.Styled("Luna.TextMuted");
+        // Beschriftung links, Inhalt rechtsbündig im Rest – lange Statustexte brechen um statt abgeschnitten zu werden.
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 12, 0) }.Styled("Luna.TextMuted");
         text.TextWrapping = TextWrapping.NoWrap;
-        DockPanel.SetDock(text, Dock.Left);
-        DockPanel.SetDock(content, Dock.Right);
+        content.HorizontalAlignment = HorizontalAlignment.Right;
         content.VerticalAlignment = VerticalAlignment.Center;
-        dock.Children.Add(text);
-        dock.Children.Add(content);
-        return dock;
+        Grid.SetColumn(content, 1);
+        grid.Children.Add(text);
+        grid.Children.Add(content);
+        return grid;
     }
 
     private void Dictate_Click(object sender, RoutedEventArgs e) => _state.ToggleRecordingFromMenu();
