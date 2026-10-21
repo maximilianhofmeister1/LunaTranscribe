@@ -4,6 +4,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LunaTranscribe", "LunaTrans
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LunaCore", "LunaCore\LunaCore.csproj", "{5F51A369-C6A9-4AEF-8B93-689FA76FE976}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LunaCore.Tests", "LunaCore.Tests\LunaCore.Tests.csproj", "{05DE4100-E69A-41DE-A5A7-6A65AF359296}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -18,5 +20,9 @@ Global
 		{5F51A369-C6A9-4AEF-8B93-689FA76FE976}.Debug|x64.Build.0 = Debug|Any CPU
 		{5F51A369-C6A9-4AEF-8B93-689FA76FE976}.Release|x64.ActiveCfg = Release|Any CPU
 		{5F51A369-C6A9-4AEF-8B93-689FA76FE976}.Release|x64.Build.0 = Release|Any CPU
+		{05DE4100-E69A-41DE-A5A7-6A65AF359296}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{05DE4100-E69A-41DE-A5A7-6A65AF359296}.Debug|x64.Build.0 = Debug|Any CPU
+		{05DE4100-E69A-41DE-A5A7-6A65AF359296}.Release|x64.ActiveCfg = Release|Any CPU
+		{05DE4100-E69A-41DE-A5A7-6A65AF359296}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
