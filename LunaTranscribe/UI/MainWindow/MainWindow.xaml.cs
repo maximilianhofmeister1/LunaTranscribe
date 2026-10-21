@@ -78,6 +78,7 @@ public partial class MainWindow : Window
     private FrameworkElement CreatePage(MainPage page) => page switch
     {
         MainPage.Overview => new OverviewPage(_state),
+        MainPage.Meetings => new MeetingsPage(_state),
         MainPage.Settings => new UI.Pages.Settings.SettingsPage(_state),
         MainPage.Dictionary => new DictionaryPage(_state),
         MainPage.History => new HistoryPage(_state),

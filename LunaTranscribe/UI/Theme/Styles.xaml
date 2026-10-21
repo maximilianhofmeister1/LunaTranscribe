@@ -328,10 +328,13 @@
                 <ControlTemplate TargetType="TextBox">
                     <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="10">
-                        <Grid Margin="{TemplateBinding Padding}">
-                            <TextBlock x:Name="Placeholder" Text="{TemplateBinding t:Luna.Placeholder}" Foreground="{DynamicResource Luna.InkMuted}"
-                                       FontFamily="{TemplateBinding FontFamily}" FontSize="{TemplateBinding FontSize}" Margin="2,0,0,0"
-                                       VerticalAlignment="{TemplateBinding VerticalContentAlignment}" IsHitTestVisible="False" Visibility="Collapsed" />
+                        <!-- Padding wirkt nur einmal: TextBoxBase gibt sie selbst an PART_ContentHost weiter. -->
+                        <Grid>
+                            <Border Padding="{TemplateBinding Padding}" IsHitTestVisible="False">
+                                <TextBlock x:Name="Placeholder" Text="{TemplateBinding t:Luna.Placeholder}" Foreground="{DynamicResource Luna.InkMuted}"
+                                           FontFamily="{TemplateBinding FontFamily}" FontSize="{TemplateBinding FontSize}" Margin="2,0,0,0"
+                                           VerticalAlignment="{TemplateBinding VerticalContentAlignment}" Visibility="Collapsed" />
+                            </Border>
                             <ScrollViewer x:Name="PART_ContentHost" Focusable="False" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
                         </Grid>
                     </Border>

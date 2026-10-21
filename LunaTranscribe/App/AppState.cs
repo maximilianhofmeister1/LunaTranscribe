@@ -1,15 +1,19 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Threading;
 using LunaTranscribe.Audio;
 using LunaTranscribe.Engine;
 using LunaTranscribe.Hotkeys;
+using LunaTranscribe.Meeting;
 using LunaTranscribe.Output;
 using LunaTranscribe.Settings;
+using LunaTranscribe.Summary;
 using LunaTranscribe.UI.MainWindow;
 using LunaCore;
 
@@ -34,6 +38,15 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
     public ModelManager Models { get; }
     public ObservableCollection<Transcript> History { get; } = new();
     public MainRouter Router { get; } = new();
+
+    /// <summary>Meeting-Bibliothek im frei wählbaren Meeting-Ordner.</summary>
+    public MeetingStore Meetings { get; }
+    /// <summary>Verarbeitet beendete Meetings im Hintergrund, eines nach dem anderen.</summary>
+    public MeetingProcessingQueue MeetingQueue { get; }
+    /// <summary>Zusammenfassungen über die Claude CLI.</summary>
+    public MeetingSummarizer Summarizer { get; }
+    /// <summary>Mitteilungen „Meeting fertig“/„fehlgeschlagen“; App setzt <see cref="MeetingNotifier.Presenter"/> auf das Tray-Symbol.</summary>
+    public MeetingNotifier Notifier { get; } = new();
 
     /// <summary>Zeigt das Hauptfenster (setzt App beim Start).</summary>
     public Action? ShowMainWindow { get; set; }
@@ -71,6 +84,12 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
             }
         };
 
+        // Meetings: Bibliothek, Hintergrund-Verarbeitung, Zusammenfassung
+        Meetings = new MeetingStore(Settings, dispatcher);
+        MeetingQueue = new MeetingProcessingQueue(Settings, Models, Meetings, CreateMeetingPipeline());
+        Summarizer = new MeetingSummarizer(Settings, Meetings);
+        BindMeetings();
+
         _hook = new KeyboardHook(dispatcher) { Primary = Settings.PrimaryHotkey, Secondary = Settings.SecondaryHotkey, Refined = Settings.RefinedHotkey };
         _hook.HotkeyDown += HotkeyDown;
         _hook.HotkeyUp += HotkeyUp;
@@ -98,9 +117,15 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         ApplyVocabulary();
 
         // Modell direkt beim Start laden, damit der erste Hotkey sofort reagiert.
-        Models.CanUnload = () => Status == StatusKind.Idle;
+        // Nie mitten in einer Meeting-Verarbeitung entladen – die Warteschlange lädt es sonst ohnehin sofort nach.
+        Models.CanUnload = () => Status == StatusKind.Idle && !MeetingQueue.IsProcessing;
         Models.UnloadAfter = TimeSpan.FromMinutes(Settings.UnloadAfterMinutes);
         if (interactive) Models.EnsureLoaded(Settings.Engine);
+        if (interactive)
+        {
+            Meetings.StartWatching();
+            MeetingQueue.Active = true;   // wartende Meetings vom letzten Lauf weiterverarbeiten
+        }
 
         _levelTimer = new DispatcherTimer(DispatcherPriority.Render, dispatcher) { Interval = TimeSpan.FromMilliseconds(50) };
         _levelTimer.Tick += (_, _) => InputLevel = _recorder.Level;
@@ -217,14 +242,52 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         OpenMainWindow(MainPage.Meetings);
     }
 
-    // MARK: Meeting & Wörterbuch (Platzhalter bis zur Integration)
+    // MARK: Meetings
+
+    /// <summary>
+    /// Die Verarbeitung beendeter Meetings. Integration: hier den echten <c>MeetingTranscriber</c>
+    /// (Sprechererkennung + Transkription je Beitrag) einsetzen; bis dahin transkribiert
+    /// <see cref="WholeFilePipeline"/> die ganze Aufnahme als ein Sprecher.
+    /// </summary>
+    private static IMeetingPipeline CreateMeetingPipeline() => new WholeFilePipeline();
+
+    private void BindMeetings()
+    {
+        Meetings.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(MeetingStore.Entries)) return;
+            OnPropertyChanged(nameof(MeetingCount));
+            OnPropertyChanged(nameof(RecentMeetings));
+        };
+        MeetingQueue.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MeetingProcessingQueue.PendingCount)) OnPropertyChanged(nameof(MeetingsPending));
+            if (e.PropertyName == nameof(MeetingProcessingQueue.Items)) OnPropertyChanged(nameof(MeetingQueueItems));
+        };
+        // Fertige Meetings melden, statt ein Fenster zu öffnen – das würde mitten im nächsten Meeting stören.
+        Notifier.OnOpenMeeting = OpenMeeting;
+        MeetingQueue.Finished += (title, id) => Notifier.MeetingFinished(title, id);
+        MeetingQueue.Failed += (title, message) => Notifier.MeetingFailed(title, message);
+    }
+
+    /// <summary>Gespeicherte Meetings (Bibliothek + Rettungsordner).</summary>
+    public int MeetingCount => Meetings.Entries.Count;
+
+    /// <summary>Meetings in der Hintergrund-Verarbeitung (laufend oder wartend, ohne fehlgeschlagene).</summary>
+    public int MeetingsPending => MeetingQueue.PendingCount;
+
+    /// <summary>Alle Aufträge der Warteschlange (auch fehlgeschlagene) – ändert sich bei jedem Zustandswechsel.</summary>
+    public int MeetingQueueItems => MeetingQueue.Items.Count;
+
+    /// <summary>Die drei neuesten Meetings für die Übersicht.</summary>
+    public IReadOnlyList<MeetingEntry> RecentMeetings => Meetings.Entries.Take(3).ToList();
+
+    // MARK: Meeting-Aufnahme & Wörterbuch (Platzhalter bis zur Integration)
 
     /// <summary>Offene Wörterbuch-Vorschläge (Plakette in der Seitenleiste).</summary>
     public int SuggestionCount => Settings.VocabularyEnabled ? Settings.VocabularySuggestions.Count : 0;
     public bool MeetingRecording => false;
     public string MeetingElapsedText => "";
-    public int MeetingsPending => 0;
-    public int MeetingCount => 0;
     public void ToggleMeetingFromMenu() { }
 
     /// <summary>Nur für UI-Snapshots: zeigt einen Zustand, ohne aufzunehmen.</summary>
@@ -504,6 +567,9 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
 
     public void Dispose()
     {
+        Meetings.FlushOpenDocuments();
+        Meetings.StopWatching();
+        MeetingQueue.Shutdown();   // laufender Auftrag bleibt in der Warteschlange und läuft beim nächsten Start neu
         _levelTimer.Stop();
         _permissionTimer.Stop();
         _hook.Dispose();
