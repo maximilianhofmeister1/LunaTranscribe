@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Data;
 using LunaTranscribe.Engine;
 using LunaTranscribe.Settings;
+using LunaCore;
 
 namespace LunaTranscribe.UI;
 

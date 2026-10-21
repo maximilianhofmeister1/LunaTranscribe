@@ -36,7 +36,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\LunaCore\LunaCore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Resource Include="Assets\LunaTranscribe.ico" />
+    <Resource Include="Assets\Fonts\*.ttf" />
   </ItemGroup>
 
 </Project>

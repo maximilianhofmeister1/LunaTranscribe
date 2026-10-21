@@ -2,36 +2,9 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using LunaTranscribe.Settings;
+using LunaCore;
 
 namespace LunaTranscribe.Engine;
-
-public enum EngineKind
-{
-    Parakeet,   // Standard: schnell, ~1 GB RAM
-    Cohere,     // Beste Qualität, aber ~3 GB Modell und ~4 GB RAM
-}
-
-public static class EngineKindExtensions
-{
-    public static string Label(this EngineKind k) => k switch
-    {
-        EngineKind.Cohere => "Cohere Transcribe (beste Qualität, 14 Sprachen, ~3 GB Download, ~4 GB RAM)",
-        EngineKind.Parakeet => "Parakeet TDT v3 (empfohlen – schnell, 25 Sprachen, ~0,7 GB Download, ~1 GB RAM)",
-        _ => k.ToString(),
-    };
-
-    public static string ShortLabel(this EngineKind k) => k switch
-    {
-        EngineKind.Cohere => "Cohere Transcribe",
-        EngineKind.Parakeet => "Parakeet v3",
-        _ => k.ToString(),
-    };
-
-    public static string Key(this EngineKind k) => k == EngineKind.Cohere ? "cohere" : "parakeet";
-
-    public static EngineKind FromKey(string? key) => key == "cohere" ? EngineKind.Cohere : EngineKind.Parakeet;
-}
 
 /// <summary>
 /// Gemeinsame Schnittstelle. Weitere Engines (z. B. Whisper) lassen sich ergänzen,

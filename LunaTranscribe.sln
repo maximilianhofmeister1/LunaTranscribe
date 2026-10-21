@@ -1,6 +1,8 @@
-Microsoft Visual Studio Solution File, Format Version 12.00
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LunaTranscribe", "LunaTranscribe\LunaTranscribe.csproj", "{7C1E4B3A-5D2F-4A8E-9B6C-1F2E3D4C5B6A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LunaCore", "LunaCore\LunaCore.csproj", "{5F51A369-C6A9-4AEF-8B93-689FA76FE976}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -12,5 +14,9 @@ Global
 		{7C1E4B3A-5D2F-4A8E-9B6C-1F2E3D4C5B6A}.Debug|x64.Build.0 = Debug|x64
 		{7C1E4B3A-5D2F-4A8E-9B6C-1F2E3D4C5B6A}.Release|x64.ActiveCfg = Release|x64
 		{7C1E4B3A-5D2F-4A8E-9B6C-1F2E3D4C5B6A}.Release|x64.Build.0 = Release|x64
+		{5F51A369-C6A9-4AEF-8B93-689FA76FE976}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{5F51A369-C6A9-4AEF-8B93-689FA76FE976}.Debug|x64.Build.0 = Debug|Any CPU
+		{5F51A369-C6A9-4AEF-8B93-689FA76FE976}.Release|x64.ActiveCfg = Release|Any CPU
+		{5F51A369-C6A9-4AEF-8B93-689FA76FE976}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

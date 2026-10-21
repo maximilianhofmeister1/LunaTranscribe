@@ -8,6 +8,7 @@ using LunaTranscribe.Engine;
 using LunaTranscribe.Hotkeys;
 using LunaTranscribe.Output;
 using Microsoft.Win32;
+using LunaCore;
 
 namespace LunaTranscribe.Settings;
 

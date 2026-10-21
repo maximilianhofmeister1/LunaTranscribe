@@ -22,6 +22,14 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // Entwickler-Selbsttests (--…-selftest): ohne Tray, ohne Hook, beenden den Prozess selbst.
+        if (SelfTests.IsRequested(e.Args))
+        {
+            DispatcherUnhandledException += OnUnhandledException;
+            Dispatcher.BeginInvoke(async () => Shutdown(await SelfTests.RunAsync(e.Args)));
+            return;
+        }
+
         // Nur eine Instanz: der globale Tastatur-Hook darf nicht doppelt laufen.
         _singleInstance = new Mutex(true, @"Local\LunaTranscribe.SingleInstance", out var createdNew);
         if (!createdNew)

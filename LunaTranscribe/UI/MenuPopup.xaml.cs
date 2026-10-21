@@ -10,6 +10,7 @@ using LunaTranscribe.Core;
 using LunaTranscribe.Engine;
 using LunaTranscribe.Output;
 using LunaTranscribe.Settings;
+using LunaCore;
 
 namespace LunaTranscribe.UI;
 

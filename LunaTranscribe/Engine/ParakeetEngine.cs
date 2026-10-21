@@ -1,5 +1,6 @@
 using LunaTranscribe.Settings;
 using SherpaOnnx;
+using LunaCore;
 
 namespace LunaTranscribe.Engine;
 

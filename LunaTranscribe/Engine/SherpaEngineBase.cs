@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using LunaTranscribe.Settings;
 using SherpaOnnx;
+using LunaCore;
 
 namespace LunaTranscribe.Engine;
 

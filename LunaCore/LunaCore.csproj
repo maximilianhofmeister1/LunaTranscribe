@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Gemeinsamer Kern von App und luna-mcp: Datenmodell, Meeting-Bibliothek, Wörterbuch-Logik, Suche.
+       Bewusst ohne WPF/WinForms und ohne native Abhängigkeiten, damit er sich mit `dotnet test` prüfen lässt. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>LunaCore</RootNamespace>
+    <AssemblyName>LunaCore</AssemblyName>
+  </PropertyGroup>
+
+</Project>

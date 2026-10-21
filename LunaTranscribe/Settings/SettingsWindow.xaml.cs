@@ -10,6 +10,7 @@ using LunaTranscribe.Core;
 using LunaTranscribe.Audio;
 using LunaTranscribe.Engine;
 using LunaTranscribe.Output;
+using LunaCore;
 
 namespace LunaTranscribe.Settings;
 

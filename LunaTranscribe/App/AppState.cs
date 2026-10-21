@@ -10,6 +10,7 @@ using LunaTranscribe.Engine;
 using LunaTranscribe.Hotkeys;
 using LunaTranscribe.Output;
 using LunaTranscribe.Settings;
+using LunaCore;
 
 namespace LunaTranscribe.Core;
 

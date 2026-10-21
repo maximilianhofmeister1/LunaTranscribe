@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Threading;
 using LunaTranscribe.Output;
+using LunaCore;
 
 namespace LunaTranscribe.Engine;
 
