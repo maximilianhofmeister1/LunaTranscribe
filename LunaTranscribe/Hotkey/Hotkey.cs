@@ -18,8 +18,9 @@ public enum HotkeyModifiers
 
 public enum HotkeySlot
 {
-    Primary,
-    Secondary,
+    Primary,     // Hauptsprache
+    Secondary,   // Zweitsprache
+    Refined,     // Hauptsprache + Nachbearbeitung durch das lokale Sprachmodell
 }
 
 /// <summary>

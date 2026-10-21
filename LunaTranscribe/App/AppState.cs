@@ -71,7 +71,7 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
             }
         };
 
-        _hook = new KeyboardHook(dispatcher) { Primary = Settings.PrimaryHotkey, Secondary = Settings.SecondaryHotkey };
+        _hook = new KeyboardHook(dispatcher) { Primary = Settings.PrimaryHotkey, Secondary = Settings.SecondaryHotkey, Refined = Settings.RefinedHotkey };
         _hook.HotkeyDown += HotkeyDown;
         _hook.HotkeyUp += HotkeyUp;
         _hook.EscapeDown += () => { if (Status != StatusKind.Idle) Cancel(); };
@@ -83,6 +83,7 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
             {
                 case nameof(SettingsStore.PrimaryHotkey): _hook.Primary = Settings.PrimaryHotkey; break;
                 case nameof(SettingsStore.SecondaryHotkey): _hook.Secondary = Settings.SecondaryHotkey; break;
+                case nameof(SettingsStore.RefinedHotkey): _hook.Refined = Settings.RefinedHotkey; break;
                 case nameof(SettingsStore.Engine): Models.EnsureLoaded(Settings.Engine); break;
                 case nameof(SettingsStore.UnloadAfterMinutes): Models.UnloadAfter = TimeSpan.FromMinutes(Settings.UnloadAfterMinutes); break;
             }
@@ -253,7 +254,7 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
 
     private AppLanguage LanguageFor(HotkeySlot slot)
     {
-        var raw = slot == HotkeySlot.Primary ? Settings.PrimaryLanguage : Settings.SecondaryLanguage;
+        var raw = slot == HotkeySlot.Secondary ? Settings.SecondaryLanguage : Settings.PrimaryLanguage;
         return Settings.LanguageForEngine(raw);
     }
 

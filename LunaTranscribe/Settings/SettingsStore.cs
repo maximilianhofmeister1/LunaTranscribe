@@ -58,6 +58,7 @@ public sealed class SettingsStore : INotifyPropertyChanged
         public int UnloadAfterMinutes { get; set; } = 10;
         public Hotkey PrimaryHotkey { get; set; } = Hotkey.DefaultPrimary;
         public Hotkey SecondaryHotkey { get; set; } = Hotkey.None;
+        public Hotkey RefinedHotkey { get; set; } = Hotkey.None;
         public string MainWindowPlacement { get; set; } = "";
         public DailyDictationStats DailyDictationStats { get; set; } = new();
     }
@@ -180,6 +181,13 @@ public sealed class SettingsStore : INotifyPropertyChanged
     {
         get => _d.DailyDictationStats;
         set { _d.DailyDictationStats = value; Changed(); }
+    }
+
+    /// <summary>Dritter Hotkey: Hauptsprache + Nachbearbeitung. Kein Standard (wie macOS).</summary>
+    public Hotkey RefinedHotkey
+    {
+        get => _d.RefinedHotkey;
+        set { if (Equals(_d.RefinedHotkey, value)) return; _d.RefinedHotkey = value ?? Hotkey.None; Changed(); }
     }
 
     // MARK: Autostart

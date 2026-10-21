@@ -16,10 +16,18 @@ public sealed class HotkeyRecorder : Control
 {
     public static readonly DependencyProperty HotkeyProperty = DependencyProperty.Register(
         nameof(Hotkey), typeof(Hotkey), typeof(HotkeyRecorder),
-        new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, (d, _) => ((HotkeyRecorder)d).Refresh()));
+        new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, (d, e) =>
+        {
+            var r = (HotkeyRecorder)d;
+            r.Refresh();
+            if (e.NewValue is Hotkey hk) r.HotkeyChanged?.Invoke(hk);
+        }));
 
     public static readonly DependencyProperty AllowEmptyProperty = DependencyProperty.Register(
         nameof(AllowEmpty), typeof(bool), typeof(HotkeyRecorder), new PropertyMetadata(true));
+
+    /// <summary>Neue Kombination aufgezeichnet oder entfernt.</summary>
+    public event Action<Hotkey>? HotkeyChanged;
 
     /// <summary>Wird gesetzt, solange das Feld den Fokus hat.</summary>
     public event Action<bool>? CapturingChanged;

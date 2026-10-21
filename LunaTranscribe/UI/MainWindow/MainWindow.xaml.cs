@@ -78,6 +78,7 @@ public partial class MainWindow : Window
     private FrameworkElement CreatePage(MainPage page) => page switch
     {
         MainPage.Overview => new OverviewPage(_state),
+        MainPage.Settings => new UI.Pages.Settings.SettingsPage(_state),
         _ => new PlaceholderPage(page.Title()),
     };
 

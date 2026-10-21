@@ -19,6 +19,7 @@ public sealed class KeyboardHook : IDisposable
 
     public Hotkey Primary { get; set; } = Hotkey.DefaultPrimary;
     public Hotkey Secondary { get; set; } = Hotkey.None;
+    public Hotkey Refined { get; set; } = Hotkey.None;
 
     /// <summary>Solange true, werden keine Hotkeys ausgewertet (Hotkey-Recorder in den Einstellungen hat den Fokus).</summary>
     public volatile bool Suspended;
@@ -26,7 +27,7 @@ public sealed class KeyboardHook : IDisposable
     private readonly Dispatcher _dispatcher;
     private readonly LowLevelKeyboardProc _proc;   // Referenz halten, sonst räumt der GC den Delegate weg
     private IntPtr _hook;
-    private readonly bool[] _slotDown = new bool[2];
+    private readonly bool[] _slotDown = new bool[3];
 
     public KeyboardHook(Dispatcher dispatcher)
     {
@@ -63,7 +64,8 @@ public sealed class KeyboardHook : IDisposable
             return CallNextHookEx(_hook, nCode, wParam, lParam);
         }
 
-        if (Match(HotkeySlot.Primary, Primary, vk, isDown, isUp) || Match(HotkeySlot.Secondary, Secondary, vk, isDown, isUp))
+        if (Match(HotkeySlot.Primary, Primary, vk, isDown, isUp) || Match(HotkeySlot.Secondary, Secondary, vk, isDown, isUp)
+            || Match(HotkeySlot.Refined, Refined, vk, isDown, isUp))
             return (IntPtr)1;   // Taste verschlucken
 
         return CallNextHookEx(_hook, nCode, wParam, lParam);
