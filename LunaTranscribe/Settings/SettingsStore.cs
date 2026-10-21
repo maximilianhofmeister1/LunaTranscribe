@@ -33,8 +33,11 @@ public sealed class SettingsStore : INotifyPropertyChanged
 {
     // Reihenfolge wichtig: statische Felder werden in Deklarationsreihenfolge initialisiert,
     // und Load() (für Shared) braucht FilePath und JsonOptions.
+    // LUNA_SETTINGS_FILE lenkt nur für Selbsttests/Snapshots auf eine andere Datei um (wie bei luna-mcp).
     private static readonly string FilePath =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LunaTranscribe", "settings.json");
+        Environment.GetEnvironmentVariable("LUNA_SETTINGS_FILE") is { Length: > 0 } testPath
+            ? testPath
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LunaTranscribe", "settings.json");
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

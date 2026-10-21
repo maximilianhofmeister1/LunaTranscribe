@@ -42,6 +42,34 @@
     <ProjectReference Include="..\LunaCore\LunaCore.csproj" />
   </ItemGroup>
 
+  <!-- luna-mcp (MCP-Server für Claude) wird mitgebaut und im Unterordner mcp\ ausgeliefert – mit eigener .NET-Runtime
+       und eigener ONNX Runtime. Nicht in den App-Ordner: sherpa-onnx bringt dort eine andere onnxruntime.dll mit.
+       Nur Build-Reihenfolge, keine Assembly-Referenz und keine Pakete (ExcludeAssets) – nichts davon landet im App-Ordner. -->
+  <ItemGroup>
+    <ProjectReference Include="..\LunaMCP\LunaMCP.csproj" ReferenceOutputAssembly="false" Private="false" ExcludeAssets="all" PrivateAssets="all" />
+  </ItemGroup>
+
+  <Target Name="CopyLunaMcp" AfterTargets="Build" Condition="'$(BuildingForLiveUnitTesting)' != 'true'">
+    <MSBuild Projects="..\LunaMCP\LunaMCP.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);Platform=$(Platform)">
+      <Output TaskParameter="TargetOutputs" ItemName="_LunaMcpTargetPath" />
+    </MSBuild>
+    <PropertyGroup>
+      <_LunaMcpOutputDir>%(_LunaMcpTargetPath.RootDir)%(_LunaMcpTargetPath.Directory)</_LunaMcpOutputDir>
+    </PropertyGroup>
+    <Message Importance="normal" Text="luna-mcp: $(_LunaMcpOutputDir) -> $(OutDir)mcp\" />
+    <Error Condition="'$(_LunaMcpOutputDir)' == ''" Text="Ausgabeordner von luna-mcp nicht gefunden." />
+    <ItemGroup>
+      <_LunaMcpFiles Include="$(_LunaMcpOutputDir)**\*" Exclude="$(_LunaMcpOutputDir)**\*.pdb;$(_LunaMcpOutputDir)**\*.lib" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_LunaMcpFiles)" DestinationFiles="@(_LunaMcpFiles->'$(OutDir)mcp\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="PublishLunaMcp" AfterTargets="Publish">
+    <!-- Wiederhergestellt ist luna-mcp bereits (Restore folgt der ProjectReference). -->
+    <MSBuild Projects="..\LunaMCP\LunaMCP.csproj" Targets="Publish"
+             Properties="Configuration=$(Configuration);Platform=$(Platform);PublishDir=$([System.IO.Path]::GetFullPath('$(PublishDir)'))mcp\" />
+  </Target>
+
   <ItemGroup>
     <Resource Include="Assets\LunaTranscribe.ico" />
     <Resource Include="Assets\Fonts\*.ttf" />

@@ -58,6 +58,7 @@ public sealed class SettingsPage : UserControl
             SettingsSection.Refine => new RefineSettings(_state),
             SettingsSection.Meetings => new MeetingSettings(_state),
             SettingsSection.Models => new ModelSettings(_state),
+            SettingsSection.Privacy => new PrivacySettings(_state),
             _ => new ComingSoonSettings(_state, current.Title()),
         };
     }

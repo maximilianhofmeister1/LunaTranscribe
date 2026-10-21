@@ -78,10 +78,65 @@ Parakeet-Modell belegt ~750 MB. Nach der eingestellten Zeit ohne Diktat wird es 
 Beim nächsten Hotkey startet die Aufnahme **sofort**, das Modell lädt parallel (ca. 6–9 s von SSD); die
 Transkription wartet nur, falls das Diktat kürzer war als das Nachladen. Overlay zeigt dann „Modell wird geladen…“.
 
+## Meetings in Claude (MCP)
+
+`luna-mcp.exe` ist ein kleiner **MCP-Server**, der mit der App ausgeliefert wird (Unterordner `mcp\` neben
+`LunaTranscribe.exe`). Claude Code oder Claude Desktop starten ihn auf deinem PC; er liest die Meeting-Bibliothek
+direkt aus dem Meeting-Ordner – ohne Netzwerk, auch wenn LunaTranscribe gerade nicht läuft. Damit kann Claude:
+
+- **suchen** – nach Stichworten und, wenn eingeschaltet, **inhaltlich** („Wo haben wir über Preiserhöhungen
+  gesprochen?“ findet auch „wir müssen teurer werden“); Treffer mit Zeitmarke und Sprecher,
+- **lesen** – ganze Meetings oder Ausschnitte (nach Sprecher, Zeitraum), lange Meetings seitenweise,
+- **Sprecher benennen** und **Meetings umbenennen** – nur mit Erlaubnis, jede Änderung steht im Protokoll und lässt
+  sich rückgängig machen,
+- **Meetings löschen** – ausschließlich nach deiner Zustimmung in einem **Windows-Dialog**, den Claude weder auslösen
+  noch bestätigen kann („Abbrechen“ ist vorausgewählt, ohne Antwort nach 2 Minuten abgebrochen); das Meeting wandert in
+  den Papierkorb,
+- dazu Prompts wie Wochenrückblick, Aufgaben je Person, Follow-up-Mail, „Wann wurde X entschieden?“ und
+  „Sprecher benennen“ (schlägt Namen mit Belegstelle vor).
+
+**Einrichten**
+
+1. LunaTranscribe → Einstellungen → Datenschutz → **„Meetings für Claude freigeben“**. Ohne diesen Schalter antwortet
+   luna-mcp nur mit einem Hinweis (doppeltes Opt-in). Darunter optional **„Claude darf Meetings bearbeiten“**.
+2. Claude Code (einmalig in PowerShell oder der Eingabeaufforderung, „Befehl kopieren“ in den Einstellungen liefert ihn
+   mit dem richtigen Pfad):
+   ```powershell
+   claude mcp add --scope user --transport stdio lunatranscribe -- "$env:LOCALAPPDATA\Programs\LunaTranscribe\mcp\luna-mcp.exe"
+   ```
+   Claude Desktop: „Eintrag kopieren“ und in `%APPDATA%\Claude\claude_desktop_config.json` unter `mcpServers`
+   einfügen, Claude Desktop neu starten:
+   ```json
+   { "mcpServers": { "lunatranscribe": { "command": "C:\\Users\\<du>\\AppData\\Local\\Programs\\LunaTranscribe\\mcp\\luna-mcp.exe" } } }
+   ```
+3. Optional: **„Inhaltliche Suche“** (gleiche Seite) – lädt einmalig Multilingual E5 Small (~470 MB, ONNX, CPU).
+4. „Verbindung testen“ in den Einstellungen – oder im Terminal:
+   ```powershell
+   & "$env:LOCALAPPDATA\Programs\LunaTranscribe\mcp\luna-mcp.exe" --check      # Einrichtung prüfen (nur lesend)
+   & "$env:LOCALAPPDATA\Programs\LunaTranscribe\mcp\luna-mcp.exe" --selftest   # Funktionsprobe mit Beispiel-Meetings
+   ```
+
+**Suchindex:** Solange die Freigabe an ist, hält die App den Index aktuell (`%LOCALAPPDATA%\LunaTranscribe\Index\
+search.sqlite`, SQLite FTS5 + Vektoren). Dafür startet sie `mcp\luna-mcp.exe --index` im Hintergrund – nie während ein
+Meeting verarbeitet wird. luna-mcp rechnet fehlende Vektoren auch selbst nach. Der Index enthält keine Namen und nie
+vertrauliche Meetings; „Suchindex löschen“ baut ihn neu auf.
+
+**Was an Anthropic geht:** luna-mcp selbst schickt nichts ins Netz. Was Claude über luna-mcp liest (Suchtreffer,
+Transkripte), verarbeitet Claude aber bei Anthropic – wie bei der Zusammenfassung. Beim ersten Einschalten erklärt ein
+Hinweis das. **Vertrauliche Meetings** sind für Claude unsichtbar, landen nicht im Suchindex und werden nicht
+zusammengefasst. Audio und der Diktat-Verlauf sind nie erreichbar. Das Protokoll „Zuletzt durch Claude“ in den
+Einstellungen zeigt jeden Zugriff (nur IDs und Namen, keine Inhalte; `%LOCALAPPDATA%\LunaTranscribe\mcp-activity.log`).
+luna-mcp protokolliert Fehler nach `%LOCALAPPDATA%\LunaTranscribe\luna-mcp.log` (und stderr) – stdout gehört allein
+dem MCP-Protokoll.
+
+**Warum ein Unterordner:** luna-mcp bringt eine eigene .NET-Runtime und ONNX Runtime 1.31 mit; sherpa-onnx (Spracherkennung)
+liefert im App-Ordner eine andere `onnxruntime.dll` (1.28). Im Unterordner `mcp\` kommen sich beide nie in die Quere.
+
 ## Datenschutz
 
 - Audio bleibt nur im RAM (16 kHz mono ≈ 4 MB/min) und wird direkt nach der Transkription verworfen.
-- Keine Cloud, keine Analytics. Einzige Netzwerkverbindung: der einmalige Modell-Download.
+- Keine Cloud, keine Analytics. Einzige Netzwerkverbindung: der einmalige Modell-Download (auch das optionale
+  Embedding-Modell der inhaltlichen Suche). Was Claude über luna-mcp liest, siehe oben – nur nach Freigabe.
 - „Letzte Diktate“ im Menü leben nur im Arbeitsspeicher (abschaltbar).
 - `%LOCALAPPDATA%\LunaTranscribe\luna.log` enthält nur Zeitmessungen und Fehler – nie Audio oder Text.
 
@@ -116,6 +171,9 @@ LunaTranscribe/
   Output/         TextInjector (Zwischenablage + Strg+V), Permissions, MediaPlaybackController, Sounds, Log
   Settings/       SettingsStore (JSON + Autostart), AppLanguage, SettingsWindow, HotkeyRecorder
   UI/             TrayIcon (NotifyIcon + gezeichnete Symbole), MenuPopup, OverlayWindow
+LunaCore/         gemeinsamer Kern (Modell, Bibliothek, Wörterbuch, Suche: Chunker, KeywordQuery, HybridRanker, SearchIndex)
+LunaMCP/          luna-mcp.exe: MCP-Server (stdio), Tools/Ressourcen/Prompts, Bestätigungsdialog, ONNX-Embeddings
+LunaCore.Tests/, LunaMCP.Tests/   xUnit
 scripts/build-release.ps1
 ```
 

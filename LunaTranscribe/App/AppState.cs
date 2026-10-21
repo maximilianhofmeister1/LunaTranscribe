@@ -13,6 +13,7 @@ using LunaTranscribe.Hotkeys;
 using LunaTranscribe.Meeting;
 using LunaTranscribe.Output;
 using LunaTranscribe.Refine;
+using LunaTranscribe.Search;
 using LunaTranscribe.Settings;
 using LunaTranscribe.Summary;
 using LunaTranscribe.UI.MainWindow;
@@ -41,6 +42,8 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
     public RefinerManager Refiners { get; }
     public ObservableCollection<Transcript> History { get; } = new();
     public MainRouter Router { get; } = new();
+    /// <summary>Hält den Suchindex für luna-mcp aktuell (nur solange Meetings für Claude freigegeben sind).</summary>
+    public SearchIndexer Search { get; }
 
     /// <summary>Meeting-Bibliothek im frei wählbaren Meeting-Ordner.</summary>
     public MeetingStore Meetings { get; }
@@ -80,6 +83,7 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         _dispatcher = dispatcher;
         Models = new ModelManager(dispatcher);
         Refiners = new RefinerManager(dispatcher);
+        Search = new SearchIndexer(Settings, dispatcher, interactive);
         Models.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(ModelManager.State) or nameof(ModelManager.StatusText) or nameof(ModelManager.IsReady))
@@ -94,6 +98,8 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         MeetingQueue = new MeetingProcessingQueue(Settings, Models, Meetings, CreateMeetingPipeline());
         Summarizer = new MeetingSummarizer(Settings, Meetings);
         Meeting = new MeetingSession(Settings, MeetingQueue, dispatcher);
+        // Suchindex nie neben einer Meeting-Verarbeitung aktualisieren (beide wollen CPU/RAM).
+        Search.IsBusy = () => MeetingQueue.IsProcessing;
         BindMeetings();
 
         _hook = new KeyboardHook(dispatcher) { Primary = Settings.PrimaryHotkey, Secondary = Settings.SecondaryHotkey, Refined = Settings.RefinedHotkey };
@@ -277,6 +283,7 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         Meetings.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName != nameof(MeetingStore.Entries)) return;
+            Search.LibraryChanged();
             OnPropertyChanged(nameof(MeetingCount));
             OnPropertyChanged(nameof(RecentMeetings));
         };
@@ -301,6 +308,8 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         };
         // Fertige Meetings melden, statt ein Fenster zu öffnen – das würde mitten im nächsten Meeting stören.
         Notifier.OnOpenMeeting = OpenMeeting;
+        // „Rückgängig“ in den Datenschutz-Einstellungen ändert Meetings direkt in der Bibliothek → neu einlesen.
+        ClaudeActivity.MeetingChanged += _ => _dispatcher.BeginInvoke(Meetings.Reload);
         MeetingQueue.Finished += (title, id) => Notifier.MeetingFinished(title, id);
         MeetingQueue.Failed += (title, message) => Notifier.MeetingFailed(title, message);
     }
@@ -668,6 +677,7 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         _levelTimer.Stop();
         _permissionTimer.Stop();
         _hook.Dispose();
+        Search.Dispose();
         if (Status == StatusKind.Recording) _ = _recorder.Stop();
         _media.ResumeIfPausedAsync().Wait(500);
         Models.Shutdown();

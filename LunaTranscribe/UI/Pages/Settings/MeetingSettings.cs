@@ -59,9 +59,6 @@ public sealed class MeetingSettings : SettingsSectionView
                        "Standard-Ausgabegerät mitgeschnitten (WASAPI-Loopback) – dafür braucht Windows keine eigene Berechtigung.",
             }));
 
-        // ── Integration: Karte „Inhaltliche Suche“ (Suchindex, Embedding-Modell) gehört zum Suchindex und kommt hier hin. ──
-        if (SemanticSearchCard() is { } search) root.Children.Add(search);
-
         // Zusammenfassung mit Claude
         var cliPath = new TextBox { Text = s.ClaudeCliPath, Width = 220 };
         Luna.SetPlaceholder(cliPath, "automatisch");
@@ -86,9 +83,6 @@ public sealed class MeetingSettings : SettingsSectionView
             Row("Modell", "Alias wie „sonnet“ oder „opus“; leer = Standard der CLI.", model),
             prompt));
     }
-
-    /// <summary>Platzhalter für die Karte „Inhaltliche Suche“ (Integration Suchindex); null = keine Karte.</summary>
-    private UIElement? SemanticSearchCard() => null;
 
     private static string SpeakerCountLabel(int count) => count == 0 ? "Automatisch" : $"{count} Personen";
 
