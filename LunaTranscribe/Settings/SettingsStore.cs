@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -61,6 +63,33 @@ public sealed class SettingsStore : INotifyPropertyChanged
         public Hotkey RefinedHotkey { get; set; } = Hotkey.None;
         public string MainWindowPlacement { get; set; } = "";
         public DailyDictationStats DailyDictationStats { get; set; } = new();
+
+        // Meetings (Schlüssel, die luna-mcp liest, stehen in LunaCore.SharedSettings.Key – nie umbenennen)
+        public bool MeetingCaptureSystemAudio { get; set; } = true;
+        public bool MeetingKeepAudio { get; set; }
+        public string MeetingFolder { get; set; } = "";
+        public int MeetingSpeakerCount { get; set; }
+        public string ClaudeCliPath { get; set; } = "";
+        public string ClaudeModel { get; set; } = "";
+        public string SummaryPrompt { get; set; } = "";
+        public bool SummaryCloudNoticeAccepted { get; set; }
+
+        // Nachbearbeitung
+        public string RefinerKind { get; set; } = "";
+        public string RefinePrompt { get; set; } = "";
+
+        // Wörterbuch
+        public bool VocabularyEnabled { get; set; } = true;
+        public List<VocabularyEntry> VocabularyEntries { get; set; } = new();
+        public List<VocabularySuggestion> VocabularySuggestions { get; set; } = new();
+        public List<string> IgnoredSuggestionKeys { get; set; } = new();
+
+        // Claude (luna-mcp)
+        public bool McpAccessEnabled { get; set; }
+        public bool McpWriteEnabled { get; set; }
+        public bool McpConfirmRenames { get; set; }
+        public bool McpCloudNoticeAccepted { get; set; }
+        public bool SemanticSearchEnabled { get; set; }
     }
 
     private readonly Data _d;
@@ -190,6 +219,92 @@ public sealed class SettingsStore : INotifyPropertyChanged
         set { if (Equals(_d.RefinedHotkey, value)) return; _d.RefinedHotkey = value ?? Hotkey.None; Changed(); }
     }
 
+    // MARK: Meetings
+
+    /// <summary>Systemaudio (Wiedergabe von Teams, Zoom, Browser …) mitschneiden.</summary>
+    public bool MeetingCaptureSystemAudio { get => _d.MeetingCaptureSystemAudio; set => Set(_d.MeetingCaptureSystemAudio, value, v => _d.MeetingCaptureSystemAudio = v); }
+
+    /// <summary>Aufnahme (audio.wav) im Meeting-Ordner behalten.</summary>
+    public bool MeetingKeepAudio { get => _d.MeetingKeepAudio; set => Set(_d.MeetingKeepAudio, value, v => _d.MeetingKeepAudio = v); }
+
+    /// <summary>Meeting-Ordner; "" = Dokumente\LunaTranscribe Meetings.</summary>
+    public string MeetingFolder { get => _d.MeetingFolder; set => Set(_d.MeetingFolder, value ?? "", v => _d.MeetingFolder = v); }
+
+    /// <summary>Erwartete Teilnehmerzahl für die Sprechererkennung; 0 = automatisch.</summary>
+    public int MeetingSpeakerCount { get => _d.MeetingSpeakerCount; set => Set(_d.MeetingSpeakerCount, Math.Clamp(value, 0, 8), v => _d.MeetingSpeakerCount = v); }
+
+    /// <summary>Eigener Pfad zur Claude CLI; "" = automatisch suchen.</summary>
+    public string ClaudeCliPath { get => _d.ClaudeCliPath; set => Set(_d.ClaudeCliPath, value ?? "", v => _d.ClaudeCliPath = v); }
+
+    /// <summary>Modell für Zusammenfassungen (z. B. „sonnet“); "" = Standard der CLI.</summary>
+    public string ClaudeModel { get => _d.ClaudeModel; set => Set(_d.ClaudeModel, value ?? "", v => _d.ClaudeModel = v); }
+
+    /// <summary>Anweisung für Zusammenfassungen; gespeichert wird nur eine Abweichung vom Standard ("" = Standard).</summary>
+    public string SummaryPrompt
+    {
+        get => string.IsNullOrWhiteSpace(_d.SummaryPrompt) ? LunaCore.SummaryPrompt.DefaultTemplate : _d.SummaryPrompt;
+        set => Set(_d.SummaryPrompt, value == LunaCore.SummaryPrompt.DefaultTemplate ? "" : value ?? "", v => _d.SummaryPrompt = v);
+    }
+
+    public bool SummaryPromptIsDefault => string.IsNullOrWhiteSpace(_d.SummaryPrompt);
+
+    public bool SummaryCloudNoticeAccepted { get => _d.SummaryCloudNoticeAccepted; set => Set(_d.SummaryCloudNoticeAccepted, value, v => _d.SummaryCloudNoticeAccepted = v); }
+
+    // MARK: Nachbearbeitung
+
+    /// <summary>Schlüssel des Sprachmodells (RefinerKind); "" = Standard.</summary>
+    public string RefinerKey { get => _d.RefinerKind; set => Set(_d.RefinerKind, value ?? "", v => _d.RefinerKind = v, nameof(RefinerKey)); }
+
+    /// <summary>Eigene Anweisung für die Nachbearbeitung; "" = mitgelieferte Fassung.</summary>
+    public string RefinePromptOverride { get => _d.RefinePrompt; set => Set(_d.RefinePrompt, value ?? "", v => _d.RefinePrompt = v, nameof(RefinePromptOverride)); }
+
+    // MARK: Wörterbuch
+
+    public bool VocabularyEnabled { get => _d.VocabularyEnabled; set => Set(_d.VocabularyEnabled, value, v => _d.VocabularyEnabled = v); }
+
+    /// <summary>Einträge (Kopie). Ändern nur über den Setter, damit gespeichert und benachrichtigt wird.</summary>
+    public List<VocabularyEntry> VocabularyEntries
+    {
+        get => _d.VocabularyEntries.Select(e => e.Clone()).ToList();
+        set { _d.VocabularyEntries = value?.Select(e => e.Clone()).ToList() ?? new(); Changed(); }
+    }
+
+    public List<VocabularySuggestion> VocabularySuggestions
+    {
+        get => _d.VocabularySuggestions.Select(e => e with { }).ToList();
+        set { _d.VocabularySuggestions = value?.ToList() ?? new(); Changed(); }
+    }
+
+    public List<string> IgnoredSuggestionKeys
+    {
+        get => _d.IgnoredSuggestionKeys.ToList();
+        set { _d.IgnoredSuggestionKeys = value?.Distinct().ToList() ?? new(); Changed(); }
+    }
+
+    /// <summary>Wörterbuch-Zustand für LunaCore.VocabularyLearner.</summary>
+    public VocabularyState VocabularyState
+    {
+        get => new(VocabularyEntries, VocabularySuggestions, IgnoredSuggestionKeys.ToHashSet());
+        set
+        {
+            _d.VocabularyEntries = value.Entries.Select(e => e.Clone()).ToList();
+            _d.VocabularySuggestions = value.Suggestions.ToList();
+            _d.IgnoredSuggestionKeys = value.IgnoredKeys.ToList();
+            Save();
+            OnPropertyChanged(nameof(VocabularyEntries));
+            OnPropertyChanged(nameof(VocabularySuggestions));
+            OnPropertyChanged(nameof(IgnoredSuggestionKeys));
+        }
+    }
+
+    // MARK: Claude (luna-mcp)
+
+    public bool McpAccessEnabled { get => _d.McpAccessEnabled; set => Set(_d.McpAccessEnabled, value, v => _d.McpAccessEnabled = v); }
+    public bool McpWriteEnabled { get => _d.McpWriteEnabled; set => Set(_d.McpWriteEnabled, value, v => _d.McpWriteEnabled = v); }
+    public bool McpConfirmRenames { get => _d.McpConfirmRenames; set => Set(_d.McpConfirmRenames, value, v => _d.McpConfirmRenames = v); }
+    public bool McpCloudNoticeAccepted { get => _d.McpCloudNoticeAccepted; set => Set(_d.McpCloudNoticeAccepted, value, v => _d.McpCloudNoticeAccepted = v); }
+    public bool SemanticSearchEnabled { get => _d.SemanticSearchEnabled; set => Set(_d.SemanticSearchEnabled, value, v => _d.SemanticSearchEnabled = v); }
+
     // MARK: Autostart
 
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
@@ -244,6 +359,13 @@ public sealed class SettingsStore : INotifyPropertyChanged
 
     /// <summary>Stellt sicher, dass die gewählte Sprache zur Engine passt.</summary>
     public AppLanguage LanguageForEngine(AppLanguage lang) => lang.IsSupported(Engine) ? lang : AppLanguage.English;
+
+    private void Set<T>(T current, T value, Action<T> assign, [CallerMemberName] string? name = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(current, value)) return;
+        assign(value);
+        Changed(name);
+    }
 
     private void Changed([CallerMemberName] string? name = null)
     {
