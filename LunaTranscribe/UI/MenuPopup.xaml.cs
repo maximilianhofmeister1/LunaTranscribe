@@ -6,10 +6,12 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Shapes;
 using LunaCore;
 using LunaTranscribe.Core;
 using LunaTranscribe.Engine;
 using LunaTranscribe.Output;
+using LunaTranscribe.UI.Components;
 using LunaTranscribe.UI.MainWindow;
 using LunaTranscribe.UI.Theme;
 
@@ -29,6 +31,12 @@ public partial class MenuPopup : Window
     private readonly ComboBox _language = new() { MinWidth = 120 };
     private readonly HStack _dictationButtons = new() { Spacing = 6 };
     private readonly VStack _meetingBody = new() { Spacing = 8 };
+    private readonly Button _meetingStart = new() { Content = "Starten", HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly DockPanel _meetingRecording = new();
+    private readonly TextBlock _meetingElapsed = new() { FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+    private readonly ComboBox _speakerCount = new() { FontSize = 12, HorizontalAlignment = HorizontalAlignment.Left, MinHeight = 26 };
+    private readonly VStack _meetingQueue = new() { Spacing = 8 };
+    private readonly TextBlock _queueHint = new() { Text = "Startet, sobald das Modell geladen ist." };
     private readonly LunaCard _historyCard = new() { Padding = new Thickness(12) };
     private readonly VStack _historyItems = new() { Spacing = 6 };
 
@@ -102,6 +110,7 @@ public partial class MenuPopup : Window
         var meeting = new VStack { Spacing = 8 };
         meeting.Children.Add(new TextBlock { Text = "Meeting", FontSize = 14 }.Styled("Luna.Title"));
         meeting.Children.Add(_meetingBody);
+        BuildMeeting();
         Body.Children.Add(new LunaCard { Padding = new Thickness(12), Content = meeting });
 
         // Zuletzt
@@ -236,14 +245,70 @@ public partial class MenuPopup : Window
         }
     }
 
+    /// <summary>Meeting-Karte einmal aufbauen; <see cref="RefreshMeeting"/> schaltet nur Sichtbarkeiten und Texte.</summary>
+    private void BuildMeeting()
+    {
+        Luna.SetIcon(_meetingStart, IconKind.People);
+        _meetingStart.Click += (_, _) => _state.ToggleMeetingFromMenu();
+        _meetingBody.Children.Add(_meetingStart);
+
+        // Laufendes Meeting (Aufnahme-Zustand liefert die Integration über AppState.MeetingRecording)
+        var dot = new Ellipse { Width = 8, Height = 8, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) }
+            .Brushed(Shape.FillProperty, "Luna.Honey");
+        DockPanel.SetDock(dot, Dock.Left);
+        var stop = new Button { Content = "Beenden" }.Styled("Luna.Primary");
+        stop.Click += (_, _) => _state.ToggleMeetingFromMenu();
+        DockPanel.SetDock(stop, Dock.Right);
+        _meetingRecording.Children.Add(dot);
+        _meetingRecording.Children.Add(stop);
+        _meetingElapsed.Styled("Luna.TextBase");
+        _meetingRecording.Children.Add(_meetingElapsed);
+        _meetingBody.Children.Add(_meetingRecording);
+
+        // Bekannte Teilnehmerzahl hilft der Sprechererkennung enorm (bei ähnlichen Stimmen landet sonst alles bei
+        // einem Sprecher). 0 = automatisch; bis zum Beenden änderbar.
+        _speakerCount.Items.Add(new ComboBoxItem { Content = "Personen: automatisch", Tag = 0 });
+        for (var n = 2; n <= 8; n++) _speakerCount.Items.Add(new ComboBoxItem { Content = $"{n} Personen", Tag = n });
+        _speakerCount.ToolTip = "Bekannte Teilnehmerzahl verbessert die Sprechererkennung deutlich";
+        _speakerCount.SelectionChanged += (_, _) =>
+        {
+            if (_updating || _speakerCount.SelectedItem is not ComboBoxItem { Tag: int n }) return;
+            _state.Settings.MeetingSpeakerCount = n;
+        };
+        _meetingBody.Children.Add(_speakerCount);
+
+        // Hintergrund-Verarbeitung beendeter Meetings
+        _meetingQueue.Children.Add(new Separator { Margin = new Thickness(0, 2, 0, 2) });
+        _meetingQueue.Children.Add(new TextBlock { Text = "Im Hintergrund", FontSize = 11, FontWeight = FontWeights.SemiBold }
+            .Styled("Luna.TextBase").Brushed(TextBlock.ForegroundProperty, "Luna.InkMuted"));
+        _meetingQueue.Children.Add(new MeetingQueueView(_state.MeetingQueue, compact: true));
+        _queueHint.Styled("Luna.Hint");
+        _meetingQueue.Children.Add(_queueHint);
+        _meetingBody.Children.Add(_meetingQueue);
+    }
+
     /// <summary>Meeting: Start/Stopp und Laufzeit; darunter die Hintergrund-Verarbeitung beendeter Meetings.</summary>
     private void RefreshMeeting()
     {
-        _meetingBody.Children.Clear();
-        var start = new Button { Content = "Starten", HorizontalAlignment = HorizontalAlignment.Left };
-        Luna.SetIcon(start, IconKind.People);
-        start.Click += (_, _) => _state.ToggleMeetingFromMenu();
-        _meetingBody.Children.Add(start);
+        var recording = _state.MeetingRecording;
+        _meetingStart.Visibility = recording ? Visibility.Collapsed : Visibility.Visible;
+        _meetingRecording.Visibility = recording ? Visibility.Visible : Visibility.Collapsed;
+        _meetingElapsed.Text = _state.MeetingElapsedText;
+
+        _updating = true;
+        try
+        {
+            var count = _state.Settings.MeetingSpeakerCount;
+            _speakerCount.SelectedItem = _speakerCount.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (int)i.Tag == count)
+                                         ?? _speakerCount.Items[0];
+        }
+        finally
+        {
+            _updating = false;
+        }
+
+        _meetingQueue.Visibility = _state.MeetingQueue.Items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        _queueHint.Visibility = _state.Models.IsReady ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void RefreshHistory()

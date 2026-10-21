@@ -8,6 +8,7 @@ using LunaCore;
 using LunaTranscribe.Core;
 using LunaTranscribe.Output;
 using LunaTranscribe.Settings;
+using LunaTranscribe.UI.Components;
 using LunaTranscribe.UI.MainWindow;
 using LunaTranscribe.UI.Theme;
 
@@ -100,10 +101,27 @@ public partial class OverviewPage : UserControl
 
         // Letzte Meetings
         RecentMeetings.Children.Clear();
-        RecentMeetings.Children.Add(new TextBlock
+        var recent = _state.RecentMeetings;
+        if (recent.Count == 0)
         {
-            Text = "Noch keine Meetings. Starte eins über das Symbol im Infobereich – Mikrofon und Systemaudio werden lokal aufgenommen und danach transkribiert.",
-        }.Styled("Luna.Hint"));
+            RecentMeetings.Children.Add(new TextBlock
+            {
+                Text = "Noch keine Meetings. Starte eins über das Symbol im Infobereich – Mikrofon und Systemaudio werden lokal aufgenommen und danach transkribiert.",
+            }.Styled("Luna.Hint"));
+        }
+        foreach (var entry in recent)
+        {
+            var row = new Border
+            {
+                CornerRadius = new CornerRadius(10), Padding = new Thickness(10, 8, 10, 8), Margin = new Thickness(-10, 0, -10, 0),
+                Background = Brushes.Transparent, Child = new MeetingRow(entry, _state.Summarizer.IsRunning(entry.Id)),
+            };
+            row.MouseEnter += (_, _) => row.SetResourceReference(Border.BackgroundProperty, "Luna.SurfaceMutedHover");
+            row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
+            var id = entry.Id;
+            row.OnClick(() => _state.OpenMeeting(id));
+            RecentMeetings.Children.Add(row);
+        }
     }
 
     private static string Display(Hotkeys.Hotkey hk) => hk.IsSet ? hk.DisplayName : "–";

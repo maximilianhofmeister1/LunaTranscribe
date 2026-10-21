@@ -63,6 +63,7 @@ public partial class App : Application
         _overlay = new OverlayWindow(_state);
         _tray = new TrayIcon(_state, QuitFromTray);
         _state.ShowMainWindow = ShowMainWindow;
+        _state.Notifier.Presenter = _tray.ShowNotification;
     }
 
     /// <summary>Hauptfenster öffnen bzw. nach vorne holen. Die App bleibt eine Infobereich-App: Schließen beendet sie nicht.</summary>

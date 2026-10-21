@@ -56,11 +56,32 @@ public sealed class TrayIcon : IDisposable
         {
             if (e.Button == WF.MouseButtons.Left) { _popup?.Hide(); _state.OpenMainWindow(); }
         };
+        _icon.BalloonTipClicked += (_, _) =>
+        {
+            var action = _notificationClick;
+            _notificationClick = null;
+            action?.Invoke();
+        };
 
         _state.PropertyChanged += OnStateChanged;
         _state.Models.PropertyChanged += OnStateChanged;
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
         Refresh();
+    }
+
+    private Action? _notificationClick;
+
+    /// <summary>
+    /// Mitteilung über das Infobereich-Symbol (unter Windows 10/11 eine Benachrichtigung im Info-Center).
+    /// <paramref name="onClick"/> läuft, wenn der Nutzer darauf klickt; eine neue Mitteilung ersetzt die alte Aktion.
+    /// </summary>
+    public void ShowNotification(string title, string text, Action? onClick)
+    {
+        _notificationClick = onClick;
+        // Windows begrenzt Titel auf 63 und Text auf 255 Zeichen.
+        var t = title.Length > 63 ? title[..62] + "…" : title;
+        var body = text.Length > 255 ? text[..254] + "…" : text;
+        _icon.ShowBalloonTip(10_000, t, body, WF.ToolTipIcon.None);
     }
 
     private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
