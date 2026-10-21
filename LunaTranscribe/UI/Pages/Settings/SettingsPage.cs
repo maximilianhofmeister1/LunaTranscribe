@@ -55,6 +55,7 @@ public sealed class SettingsPage : UserControl
         {
             SettingsSection.General => new GeneralSettings(_state),
             SettingsSection.Dictation => new DictationSettings(_state),
+            SettingsSection.Refine => new RefineSettings(_state),
             SettingsSection.Meetings => new MeetingSettings(_state),
             SettingsSection.Models => new ModelSettings(_state),
             _ => new ComingSoonSettings(_state, current.Title()),

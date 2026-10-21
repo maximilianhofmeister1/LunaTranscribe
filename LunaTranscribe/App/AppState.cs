@@ -12,6 +12,7 @@ using LunaTranscribe.Engine;
 using LunaTranscribe.Hotkeys;
 using LunaTranscribe.Meeting;
 using LunaTranscribe.Output;
+using LunaTranscribe.Refine;
 using LunaTranscribe.Settings;
 using LunaTranscribe.Summary;
 using LunaTranscribe.UI.MainWindow;
@@ -36,6 +37,8 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
 
     public SettingsStore Settings { get; } = SettingsStore.Shared;
     public ModelManager Models { get; }
+    /// <summary>Lokales Sprachmodell für die Nachbearbeitung (dritter Hotkey).</summary>
+    public RefinerManager Refiners { get; }
     public ObservableCollection<Transcript> History { get; } = new();
     public MainRouter Router { get; } = new();
 
@@ -64,6 +67,7 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
     private float _inputLevel;
     private bool _microphoneAllowed = Permissions.MicrophoneAllowed;
     private AppLanguage _activeLanguage = AppLanguage.German;
+    private bool _activeRefine;
     private DateTime _recordingStart;
     /// <summary>Zählt Transkriptionen; ein Abbruch erhöht den Wert, sodass ein verspätetes Ergebnis verworfen wird.</summary>
     private int _transcriptionGeneration;
@@ -75,6 +79,7 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         Interactive = interactive;
         _dispatcher = dispatcher;
         Models = new ModelManager(dispatcher);
+        Refiners = new RefinerManager(dispatcher);
         Models.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(ModelManager.State) or nameof(ModelManager.StatusText) or nameof(ModelManager.IsReady))
@@ -102,9 +107,18 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
             {
                 case nameof(SettingsStore.PrimaryHotkey): _hook.Primary = Settings.PrimaryHotkey; break;
                 case nameof(SettingsStore.SecondaryHotkey): _hook.Secondary = Settings.SecondaryHotkey; break;
-                case nameof(SettingsStore.RefinedHotkey): _hook.Refined = Settings.RefinedHotkey; break;
                 case nameof(SettingsStore.Engine): Models.EnsureLoaded(Settings.Engine); break;
-                case nameof(SettingsStore.UnloadAfterMinutes): Models.UnloadAfter = TimeSpan.FromMinutes(Settings.UnloadAfterMinutes); break;
+                case nameof(SettingsStore.UnloadAfterMinutes):
+                    Models.UnloadAfter = TimeSpan.FromMinutes(Settings.UnloadAfterMinutes);
+                    Refiners.UnloadAfter = Models.UnloadAfter;
+                    break;
+                case nameof(SettingsStore.RefinerKey):
+                case nameof(SettingsStore.RefinePromptOverride):
+                case nameof(SettingsStore.PrimaryLanguage):
+                case nameof(SettingsStore.RefinedHotkey):
+                    _hook.Refined = Settings.RefinedHotkey;
+                    if (Interactive) PrepareRefiner();
+                    break;
                 case nameof(SettingsStore.VocabularyEnabled):
                 case nameof(SettingsStore.VocabularyEntries):
                     ApplyVocabulary();
@@ -121,6 +135,15 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         Models.CanUnload = () => Status == StatusKind.Idle && !MeetingQueue.IsProcessing;
         Models.UnloadAfter = TimeSpan.FromMinutes(Settings.UnloadAfterMinutes);
         if (interactive) Models.EnsureLoaded(Settings.Engine);
+
+        // Sprachmodell: entlädt sich wie das ASR-Modell nach Inaktivität; nie während eines Diktats.
+        Refiners.UnloadAfter = TimeSpan.FromMinutes(Settings.UnloadAfterMinutes);
+        Refiners.CanUnload = () => Status == StatusKind.Idle;
+        Refiners.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(RefinerManager.State) or nameof(RefinerManager.StatusText)) OnPropertyChanged(nameof(RefinerStatus));
+        };
+        if (interactive) PrepareRefiner();
         if (interactive)
         {
             Meetings.StartWatching();
@@ -297,6 +320,26 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         Status = status;
     }
 
+    // MARK: Nachbearbeitung
+
+    public RefinerKind RefinerKind => RefinerKindExtensions.FromKey(Settings.RefinerKey);
+
+    /// <summary>Eigene Anweisung oder null (= mitgelieferte Fassung).</summary>
+    private string? RefinePrompt => string.IsNullOrWhiteSpace(Settings.RefinePromptOverride) ? null : Settings.RefinePromptOverride;
+
+    /// <summary>Für Statusanzeigen; ändert sich mit dem Ladezustand des Sprachmodells.</summary>
+    public string RefinerStatus => Refiners.StatusText;
+
+    /// <summary>
+    /// Lädt das Sprachmodell vor, sobald ein Hotkey für „Diktieren + Nachbearbeitung“ gesetzt ist (der Hotkey soll sofort
+    /// reagieren) oder es schon einmal geladen war. Ohne Hotkey lädt es erst bei der ersten Nachbearbeitung – spart Download und RAM.
+    /// </summary>
+    private void PrepareRefiner()
+    {
+        if (!Settings.RefinedHotkey.IsSet && Refiners.State.Kind is ModelStateKind.Idle) return;
+        Refiners.EnsureLoaded(RefinerKind, new RefineWarmup(Settings.LanguageForEngine(Settings.PrimaryLanguage), RefinePrompt));
+    }
+
     // MARK: Abbrechen (Escape / X im Overlay)
 
     public void Cancel()
@@ -339,7 +382,7 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
                 break;
             case StatusKind.Idle:
             case StatusKind.Notice:
-                StartRecording(LanguageFor(slot));
+                StartRecording(LanguageFor(slot), refine: slot == HotkeySlot.Refined);
                 break;
         }
     }
@@ -356,10 +399,10 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
     public void ToggleRecordingFromMenu(bool refine = false)
     {
         if (Status == StatusKind.Recording) StopRecordingAndTranscribe();
-        else StartRecording(LanguageFor(HotkeySlot.Primary));
+        else StartRecording(LanguageFor(HotkeySlot.Primary), refine);
     }
 
-    private void StartRecording(AppLanguage language)
+    private void StartRecording(AppLanguage language, bool refine = false)
     {
         if (_starting) return;
         if (Models.State.Kind == ModelStateKind.Failed)
@@ -376,6 +419,8 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         }
         // Modell (nach Inaktivität entladen) parallel zur Aufnahme nachladen – kostet keine Zeit beim Sprechen.
         Models.EnsureLoaded(Settings.Engine);
+        // Sprachmodell ebenso parallel laden (erste Nachbearbeitung oder nach Inaktivität entladen).
+        if (refine) Refiners.EnsureLoaded(RefinerKind, new RefineWarmup(language, RefinePrompt));
 
         var t0 = Stopwatch.StartNew();
         Log.Write("hotkey down");
@@ -419,6 +464,7 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
 
         _starting = false;
         _activeLanguage = language;
+        _activeRefine = refine;
         _recordingStart = DateTime.Now;
         Status = StatusKind.Recording;
         PlayStart();
@@ -445,13 +491,14 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         Status = StatusKind.Transcribing;
         var language = _activeLanguage;
         var keepHistory = Settings.KeepHistory;
+        var refine = _activeRefine;
         var generation = ++_transcriptionGeneration;
-        Log.Write($"transcribe start ({duration:0.0}s audio)");
+        Log.Write($"transcribe start ({duration:0.0}s audio{(refine ? ", refine" : "")})");
 
-        _ = TranscribeAsync(samples, language, duration, keepHistory, generation);
+        _ = TranscribeAsync(samples, language, duration, keepHistory, refine, generation);
     }
 
-    private async Task TranscribeAsync(float[] samples, AppLanguage language, double duration, bool keepHistory, int generation)
+    private async Task TranscribeAsync(float[] samples, AppLanguage language, double duration, bool keepHistory, bool refine, int generation)
     {
         var t0 = Stopwatch.StartNew();
         try
@@ -475,14 +522,34 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
                 return;
             }
 
+            // Nachbearbeitung: liefert immer einfügbaren Text – bei jedem Fehler den Rohtext (ein Diktat geht nie verloren).
+            string? rawText = null;
+            string? notice = null;
+            if (refine)
+            {
+                Status = StatusKind.Refining;
+                var result = await Refiners.RefineAsync(text, language, RefinerKind, RefinePrompt, System.Threading.CancellationToken.None);
+                if (generation != _transcriptionGeneration) return;
+                if (result.IsRefined)
+                {
+                    rawText = text;
+                    // Wörterbuch erneut anwenden, damit das Sprachmodell keinen Begriff zurückkorrigiert.
+                    text = TranscriptionVocabulary.Apply(result.Text);
+                }
+                notice = result.Notice;
+                elapsed = t0.Elapsed.TotalSeconds;
+                Log.Write($"refine {result.Outcome} in {result.Duration.TotalSeconds:0.00}s");
+            }
+
             Status = StatusKind.Idle;   // Overlay zuerst weg, damit es beim Einfügen nicht im Weg ist
             if (keepHistory)
             {
-                History.Insert(0, new Transcript(DateTime.Now, text, language, duration, elapsed));
+                History.Insert(0, new Transcript(DateTime.Now, text, language, duration, elapsed) { RawText = rawText });
                 while (History.Count > HistoryLimit) History.RemoveAt(History.Count - 1);
             }
             Settings.DailyDictationStats = Settings.DailyDictationStats.Adding(DailyDictationStats.CountWords(text));
             await TextInjector.InsertAsync(text);
+            if (notice != null) ShowNotice(notice);
         }
         catch (Exception ex)
         {
@@ -576,5 +643,6 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         if (Status == StatusKind.Recording) _ = _recorder.Stop();
         _media.ResumeIfPausedAsync().Wait(500);
         Models.Shutdown();
+        Refiners.Shutdown();
     }
 }

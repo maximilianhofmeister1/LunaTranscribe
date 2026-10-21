@@ -25,3 +25,21 @@ public static class LoadStatusMapping
         };
     }
 }
+
+public static class RefinerStatusMapping
+{
+    public static LoadStatus ToLoadStatus(this Refine.RefinerManager refiners)
+    {
+        var s = refiners.State;
+        return s.Kind switch
+        {
+            ModelStateKind.Idle => new LoadStatus(LoadPhase.Idle, "Lädt beim ersten Diktat mit Nachbearbeitung"),
+            ModelStateKind.Unloaded => new LoadStatus(LoadPhase.Idle, $"{Refine.RefinerKindExtensions.ShortLabel(s.Refiner ?? default)} pausiert – lädt bei Bedarf"),
+            ModelStateKind.Loading => new LoadStatus(LoadPhase.Loading, refiners.StatusText,
+                s.Progress < 0.9 && !refiners.FilesPresent ? s.Progress / 0.9 : null),
+            ModelStateKind.Ready => new LoadStatus(LoadPhase.Ready, $"{Refine.RefinerKindExtensions.ShortLabel(s.Refiner ?? default)} bereit"),
+            ModelStateKind.Failed => new LoadStatus(LoadPhase.Failed, s.Error ?? "Fehler"),
+            _ => new LoadStatus(LoadPhase.Idle, refiners.StatusText),
+        };
+    }
+}

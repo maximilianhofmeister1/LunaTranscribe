@@ -36,6 +36,7 @@ public partial class OverviewPage : UserControl
         {
             _state.PropertyChanged += OnChanged;
             _state.Models.PropertyChanged += OnChanged;
+            _state.Refiners.PropertyChanged += OnChanged;
             _state.Settings.PropertyChanged += OnChanged;
             Refresh();
         };
@@ -43,6 +44,7 @@ public partial class OverviewPage : UserControl
         {
             _state.PropertyChanged -= OnChanged;
             _state.Models.PropertyChanged -= OnChanged;
+            _state.Refiners.PropertyChanged -= OnChanged;
             _state.Settings.PropertyChanged -= OnChanged;
         };
     }
@@ -82,6 +84,8 @@ public partial class OverviewPage : UserControl
         Trim(ModelsCard);
         _asrStatus.Status = _state.Models.ToLoadStatus();
         ModelsCard.Children.Add(Row("Spracherkennung", _asrStatus));
+        var refineStatus = new LoadStatusView { Status = _state.Refiners.ToLoadStatus(), Retry = () => _state.Refiners.Retry(_state.RefinerKind) };
+        ModelsCard.Children.Add(Row("Nachbearbeitung", refineStatus));
         if (s.VocabularyEnabled && s.VocabularyEntries.Count > 0)
             ModelsCard.Children.Add(Row("Wörterbuch", new LoadStatusView { Status = new LoadStatus(LoadPhase.Ready, _state.VocabularyStatus) }));
         if (!_state.MicrophoneAllowed)
@@ -96,6 +100,7 @@ public partial class OverviewPage : UserControl
         Trim(ShortcutsCard);
         ShortcutsCard.Children.Add(Row("Diktat · " + s.PrimaryLanguage.DisplayName(), new Keycap { Text = Display(s.PrimaryHotkey) }));
         ShortcutsCard.Children.Add(Row("Diktat · " + s.SecondaryLanguage.DisplayName(), new Keycap { Text = Display(s.SecondaryHotkey) }));
+        ShortcutsCard.Children.Add(Row("Diktat + Nachbearbeitung", new Keycap { Text = Display(s.RefinedHotkey) }));
         ShortcutsCard.Children.Add(Row("Abbrechen", new Keycap { Text = "Esc" }));
         var change = new Button { Content = "Ändern…", HorizontalAlignment = HorizontalAlignment.Left }.Styled("Luna.Quiet");
         change.Click += (_, _) => _state.OpenSettings(SettingsSection.Dictation);
