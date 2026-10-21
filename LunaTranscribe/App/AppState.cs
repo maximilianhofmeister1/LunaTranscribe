@@ -9,6 +9,7 @@ using LunaTranscribe.Audio;
 using LunaTranscribe.Engine;
 using LunaTranscribe.Hotkeys;
 using LunaTranscribe.Output;
+using LunaTranscribe.Search;
 using LunaTranscribe.Settings;
 using LunaTranscribe.UI.MainWindow;
 using LunaCore;
@@ -34,6 +35,8 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
     public ModelManager Models { get; }
     public ObservableCollection<Transcript> History { get; } = new();
     public MainRouter Router { get; } = new();
+    /// <summary>Hält den Suchindex für luna-mcp aktuell (nur solange Meetings für Claude freigegeben sind).</summary>
+    public SearchIndexer Search { get; }
 
     /// <summary>Zeigt das Hauptfenster (setzt App beim Start).</summary>
     public Action? ShowMainWindow { get; set; }
@@ -62,6 +65,7 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         Interactive = interactive;
         _dispatcher = dispatcher;
         Models = new ModelManager(dispatcher);
+        Search = new SearchIndexer(Settings, dispatcher, interactive);
         Models.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(ModelManager.State) or nameof(ModelManager.StatusText) or nameof(ModelManager.IsReady))
@@ -449,6 +453,7 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         _levelTimer.Stop();
         _permissionTimer.Stop();
         _hook.Dispose();
+        Search.Dispose();
         if (Status == StatusKind.Recording) _ = _recorder.Stop();
         _media.ResumeIfPausedAsync().Wait(500);
         Models.Shutdown();

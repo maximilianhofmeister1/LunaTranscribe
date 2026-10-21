@@ -56,6 +56,7 @@ public sealed class SettingsPage : UserControl
             SettingsSection.General => new GeneralSettings(_state),
             SettingsSection.Dictation => new DictationSettings(_state),
             SettingsSection.Models => new ModelSettings(_state),
+            SettingsSection.Privacy => new PrivacySettings(_state),
             _ => new ComingSoonSettings(_state, current.Title()),
         };
     }
