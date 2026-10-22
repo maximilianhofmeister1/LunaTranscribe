@@ -12,7 +12,8 @@ LunaTranscribe is a macOS menu-bar dictation app (Swift/SwiftUI, macOS 15+, Appl
 `meeting.json` format; it has its own `windows/CLAUDE.md` (read it when working there) and builds/tests with the .NET
 SDK only. Changes to shared behaviour (meeting JSON schema, `SharedSettings` keys, prompts, vocabulary heuristics, MCP
 tools) should be mirrored in both. Releases carry both assets: `dist/LunaTranscribe-<version>.dmg` from
-`scripts/package-release.sh` and `dist/LunaTranscribe-<version>-windows-x64.zip` from
+`scripts/package-release.sh`, and `dist/LunaTranscribe-<version>-windows-x64-setup.exe` (Inno Setup,
+`windows/installer/LunaTranscribe.iss`) plus `dist/LunaTranscribe-<version>-windows-x64.zip` from
 `windows/scripts/package-release.ps1`; keep the Windows `<Version>` (in `windows/LunaTranscribe/LunaTranscribe.csproj`)
 in step with `MARKETING_VERSION`.
 

@@ -1,4 +1,4 @@
-# Baut LunaTranscribe als Release, installiert nach %LOCALAPPDATA%\Programs\LunaTranscribe und startet die App.
+﻿# Baut LunaTranscribe als Release, installiert nach %LOCALAPPDATA%\Programs\LunaTranscribe und startet die App.
 #
 #   .\scripts\build-release.ps1
 #

@@ -20,6 +20,11 @@ recording.
 
 - .NET 8 SDK, Windows 10 2004+ x64. `dotnet build LunaTranscribe.sln` (Debug), `dotnet run --project LunaTranscribe -c Release`.
 - Release install: `.\scripts\build-release.ps1` (self-contained publish to `%LOCALAPPDATA%\Programs\LunaTranscribe`).
+- GitHub release assets: `.\scripts\package-release.ps1` → `<repo>\dist\LunaTranscribe-<version>-windows-x64-setup.exe`
+  (Inno Setup 6, `installer\LunaTranscribe.iss`: per-user, no admin, same install folder, kills the running app and
+  `luna-mcp` before replacing files, uninstall keeps settings/models/meetings and removes the Run key; the `AppId` GUID
+  must never change) and `…-windows-x64.zip`, each with a `.sha256`. Scripts must stay UTF-8 **with BOM** (Windows
+  PowerShell 5.1 reads them as ANSI otherwise).
 - Unit tests only for `LunaCore` and `luna-mcp`: `dotnet test LunaCore.Tests`, `dotnet test LunaMCP.Tests`.
 - `luna-mcp` has its own checks: `mcp\luna-mcp.exe --selftest` (temp sample library, every tool/resource/prompt, delete
   only with a scripted „decline“, plus an embedding sanity check if the model is present), `--check` (real setup,
