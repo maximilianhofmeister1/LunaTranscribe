@@ -34,7 +34,7 @@ public static class ModelDownloader
         {
             Timeout = Timeout.InfiniteTimeSpan,
         };
-        c.DefaultRequestHeaders.UserAgent.ParseAdd("LunaTranscribe/0.1 (Windows)");
+        c.DefaultRequestHeaders.UserAgent.ParseAdd("LunaTranscribe/" + typeof(ModelDownloader).Assembly.GetName().Version?.ToString(3) + " (Windows)");
         return c;
     }
 

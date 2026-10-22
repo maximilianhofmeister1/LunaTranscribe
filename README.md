@@ -15,6 +15,10 @@ sich auf Knopfdruck über die **Claude CLI zusammenfassen** (die einzige, freiwi
 Alles lebt in der Menüleiste; ein **Hauptfenster** (Übersicht, Meetings, Wörterbuch, Verlauf, Einstellungen) öffnest du
 über das Menüleisten-Icon. Design „Mondnacht“: warm und verspielt, Schriften Fraunces + Figtree, Hell- und Dunkelmodus.
 
+**Auch für Windows:** Die Windows-Version (Windows 10/11, x64) liegt im Ordner [`windows/`](windows/README.md) –
+gleiche Funktionen, gleiches Design, dasselbe Meeting-Format (ein Meeting-Ordner kann zwischen Mac und PC geteilt
+werden). Download als ZIP unter [Releases](https://github.com/maximilianhofmeister1/LunaTranscribe/releases).
+
 **Open Source (MIT), kostenlos.** Einen ausführlichen Vergleich mit Wispr Flow und die Local-First-Architektur beschreibt
 [docs/Vergleich-LunaTranscribe-vs-WisprFlow.md](docs/Vergleich-LunaTranscribe-vs-WisprFlow.md).
 
@@ -437,3 +441,4 @@ Parakeets `tokenTimings`. Schwellen für das Zusammenfassen stehen oben in `Meet
 LunaTranscribe steht unter der [MIT-Lizenz](LICENSE). Mitgelieferte und genutzte Fremdkomponenten (Swift-Pakete,
 Schriften, MediaRemoteAdapter) und die Lizenzen der heruntergeladenen Modelle stehen in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Mitmachen: [CONTRIBUTING.md](CONTRIBUTING.md).
+Die Windows-Version und ihre Fremdkomponenten beschreibt [windows/README.md](windows/README.md).

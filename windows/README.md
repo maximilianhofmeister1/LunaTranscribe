@@ -14,9 +14,19 @@ Alles lebt im Infobereich; ein **Hauptfenster** (Übersicht, Meetings, Wörterbu
 das Tray-Symbol. Design „Mondnacht“: warm und verspielt, Schriften Fraunces + Figtree, hell und dunkel (folgt dem
 Windows-Farbmodus).
 
-Windows-Portierung der macOS-App [LunaTranscribe](https://github.com/maximilianhofmeister1/LunaTranscribe) – gleiche
-Funktionen, gleiche Struktur, gleiches Design. Das Meeting-Format (`meeting.json`) ist identisch: Ein Meeting-Ordner kann
+Windows-Version der [macOS-App](../README.md) aus demselben Repository – gleiche Funktionen, gleiche Struktur,
+gleiches Design. Das Meeting-Format (`meeting.json`) ist identisch: Ein Meeting-Ordner kann
 zwischen Mac und PC geteilt werden (z. B. über einen Cloud-Ordner).
+
+## Installation
+
+1. Unter [Releases](https://github.com/maximilianhofmeister1/LunaTranscribe/releases) die Datei
+   `LunaTranscribe-<Version>-windows-x64.zip` laden (optional mit der `.sha256` daneben prüfen:
+   `Get-FileHash -Algorithm SHA256 <zip>`).
+2. Entpacken, den Ordner `LunaTranscribe` z. B. nach `%LOCALAPPDATA%\Programs\` verschieben und `LunaTranscribe.exe`
+   starten – die App erscheint im Infobereich der Taskleiste.
+3. Die EXE ist nicht signiert: Windows SmartScreen warnt beim ersten Start → „Weitere Informationen“ →
+   „Trotzdem ausführen“.
 
 ## Voraussetzungen
 
@@ -27,7 +37,7 @@ zwischen Mac und PC geteilt werden (z. B. über einen Cloud-Ordner).
 
 ## Einrichten
 
-1. Repository klonen
+1. Repository klonen und in den Ordner `windows` wechseln (alle Befehle unten laufen dort)
 2. `LunaTranscribe.sln` in Visual Studio 2022 / Rider öffnen **oder** im Terminal:
    ```powershell
    dotnet run --project LunaTranscribe -c Release
@@ -42,6 +52,11 @@ zwischen Mac und PC geteilt werden (z. B. über einen Cloud-Ordner).
 
 Baut Release (self-contained, ≈ 300 MB inkl. `mcp\`), installiert nach `%LOCALAPPDATA%\Programs\LunaTranscribe`, legt
 eine Startmenü-Verknüpfung an und startet die App. Kein Administrator nötig.
+
+**ZIP für GitHub Releases:** `.\scripts\package-release.ps1` baut Release und legt
+`dist\LunaTranscribe-<Version>-windows-x64.zip` samt SHA-256 im Wurzelordner des Repos ab – neben der DMG der
+macOS-Version, damit beide im selben GitHub-Release landen. Die Version steht in `LunaTranscribe\LunaTranscribe.csproj`
+(`<Version>`) und folgt der macOS-Version.
 
 **Autostart:** Einstellungen → Allgemein → „Beim Anmelden automatisch starten“ (Eintrag unter `HKCU\…\Run`;
 erscheint in Einstellungen → Apps → Autostart und im Task-Manager). Erst aktivieren, wenn die App aus dem
@@ -347,3 +362,9 @@ LunaMCP/               luna-mcp.exe: MCP-Server (stdio), Tools/Ressourcen/Prompt
 LunaCore.Tests/, LunaMCP.Tests/   xUnit
 scripts/               build-release.ps1, make-fonts.py
 ```
+
+## Lizenz
+
+LunaTranscribe steht unter der [MIT-Lizenz](../LICENSE). Fremdkomponenten der Windows-Version (sherpa-onnx, ONNX Runtime,
+NAudio, LLamaSharp/llama.cpp, SQLite, MCP C# SDK, Schriften) und die Lizenzen der heruntergeladenen Modelle stehen in
+[THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).

@@ -8,6 +8,14 @@ LunaTranscribe is a macOS menu-bar dictation app (Swift/SwiftUI, macOS 15+, Appl
 
 **Language:** code comments, log messages, UI strings and the README are German. Keep new comments and user-facing strings German; identifiers stay English.
 
+**Windows version:** `windows/` holds the Windows port (C#/.NET 8, WPF) with the same features, design and
+`meeting.json` format; it has its own `windows/CLAUDE.md` (read it when working there) and builds/tests with the .NET
+SDK only. Changes to shared behaviour (meeting JSON schema, `SharedSettings` keys, prompts, vocabulary heuristics, MCP
+tools) should be mirrored in both. Releases carry both assets: `dist/LunaTranscribe-<version>.dmg` from
+`scripts/package-release.sh` and `dist/LunaTranscribe-<version>-windows-x64.zip` from
+`windows/scripts/package-release.ps1`; keep the Windows `<Version>` (in `windows/LunaTranscribe/LunaTranscribe.csproj`)
+in step with `MARKETING_VERSION`.
+
 ## Build & run
 
 The Xcode project is **generated from `project.yml` with XcodeGen** and is gitignored (`*.xcodeproj`). Edit `project.yml`, never the `.pbxproj`, and regenerate after changes:
