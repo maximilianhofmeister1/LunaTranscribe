@@ -1,0 +1,20 @@
+<Application x:Class="LunaTranscribe.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:LunaTranscribe.UI"
+             ShutdownMode="OnExplicitShutdown">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="UI/Theme/Styles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <ui:BoolToVisibilityConverter x:Key="BoolToVisibility" />
+            <ui:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
+            <ui:NullToVisibilityConverter x:Key="NullToVisibility" />
+            <ui:LanguageNameConverter x:Key="LanguageName" />
+            <ui:EngineLabelConverter x:Key="EngineLabel" />
+            <ui:EngineShortLabelConverter x:Key="EngineShortLabel" />
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

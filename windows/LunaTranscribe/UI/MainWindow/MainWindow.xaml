@@ -1,0 +1,107 @@
+<Window x:Class="LunaTranscribe.UI.MainWindow.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:t="clr-namespace:LunaTranscribe.UI.Theme"
+        Title="LunaTranscribe"
+        Width="1040" Height="700" MinWidth="780" MinHeight="520"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource Luna.Background}"
+        FontFamily="{StaticResource Luna.Font.Text}" FontSize="13"
+        Foreground="{DynamicResource Luna.Ink}"
+        TextOptions.TextFormattingMode="Ideal"
+        UseLayoutRounding="True">
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="34" ResizeBorderThickness="6" GlassFrameThickness="0,0,0,1" CornerRadius="0" UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <!-- Titelleisten-Knöpfe im Windows-Stil, Farben aus dem Theme -->
+        <Style x:Key="CaptionButton" TargetType="Button">
+            <Setter Property="Width" Value="46" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Foreground" Value="{DynamicResource Luna.Ink}" />
+            <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="Transparent">
+                            <TextBlock Text="{TemplateBinding Content}" FontFamily="{StaticResource Luna.Font.Icons}" FontSize="10"
+                                       Foreground="{TemplateBinding Foreground}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Luna.SurfaceMuted}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="CloseCaptionButton" TargetType="Button" BasedOn="{StaticResource CaptionButton}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="Transparent">
+                            <TextBlock x:Name="Glyph" Text="{TemplateBinding Content}" FontFamily="{StaticResource Luna.Font.Icons}" FontSize="10"
+                                       Foreground="{TemplateBinding Foreground}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#C42B1C" />
+                                <Setter TargetName="Glyph" Property="Foreground" Value="White" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid x:Name="Root">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="220" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Seitenleiste -->
+        <DockPanel Grid.Column="0" Background="{DynamicResource Luna.SurfaceMuted}">
+            <DockPanel DockPanel.Dock="Top" Margin="16,22,16,18">
+                <Image x:Name="Logo" Width="34" Height="34" VerticalAlignment="Center" />
+                <!-- wie minimumScaleFactor(0.8): Schriftzug schrumpft statt abgeschnitten zu werden -->
+                <Viewbox StretchDirection="DownOnly" Stretch="Uniform" HorizontalAlignment="Left" Margin="10,0,0,0">
+                    <TextBlock VerticalAlignment="Center" FontFamily="{StaticResource Luna.Font.Display}" FontSize="20"
+                               Foreground="{DynamicResource Luna.Ink}">
+                        <Run Text="Luna" /><Run Text="Transcribe" Foreground="{DynamicResource Luna.Lavender}" />
+                    </TextBlock>
+                </Viewbox>
+            </DockPanel>
+
+            <!-- Fußzeile: Modellstatus, laufendes Meeting, Verarbeitung -->
+            <t:VStack x:Name="Footer" DockPanel.Dock="Bottom" Spacing="6" Margin="16">
+                <t:LoadStatusView x:Name="ModelStatus" />
+                <StackPanel x:Name="MeetingLine" Orientation="Horizontal" Visibility="Collapsed">
+                    <t:LunaIcon Kind="Record" Size="12" Foreground="{DynamicResource Luna.Honey}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <TextBlock x:Name="MeetingText" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource Luna.Honey}" />
+                </StackPanel>
+                <StackPanel x:Name="QueueLine" Orientation="Horizontal" Visibility="Collapsed">
+                    <t:LunaIcon Kind="Waveform" Size="12" Foreground="{DynamicResource Luna.Lavender}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <TextBlock x:Name="QueueText" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource Luna.Lavender}" />
+                </StackPanel>
+                <TextBlock Text="Lokal auf diesem PC · Open Source" FontSize="10.5" Foreground="{DynamicResource Luna.InkMuted}" Opacity="0.8" />
+            </t:VStack>
+
+            <StackPanel x:Name="Nav" />
+        </DockPanel>
+
+        <!-- Inhalt -->
+        <ContentControl x:Name="PageHost" Grid.Column="1" Focusable="False" />
+
+        <!-- Titelleisten-Knöpfe über dem Inhalt -->
+        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+            <Button Style="{StaticResource CaptionButton}" Content="&#xE921;" ToolTip="Minimieren" Click="Minimize_Click" />
+            <Button x:Name="MaxButton" Style="{StaticResource CaptionButton}" Content="&#xE922;" ToolTip="Maximieren" Click="Maximize_Click" />
+            <Button Style="{StaticResource CloseCaptionButton}" Content="&#xE8BB;" ToolTip="Schließen" Click="Close_Click" />
+        </StackPanel>
+    </Grid>
+</Window>
