@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Gemeinsamer Kern von App und luna-mcp: Datenmodell, Meeting-Bibliothek, Wörterbuch-Logik, Suche.
+       Bewusst ohne WPF/WinForms, damit er sich mit `dotnet test` prüfen lässt. Einzige native Abhängigkeit ist
+       SQLite (e_sqlite3 über Microsoft.Data.Sqlite) für den Suchindex; ONNX Runtime (Embeddings) bleibt in luna-mcp. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>LunaCore</RootNamespace>
+    <AssemblyName>LunaCore</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Suchindex: SQLite mit FTS5 (im gebündelten e_sqlite3 enthalten). -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.13" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="LunaCore.Tests" />
+  </ItemGroup>
+
+</Project>

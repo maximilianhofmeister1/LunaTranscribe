@@ -1,0 +1,40 @@
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LunaTranscribe", "LunaTranscribe\LunaTranscribe.csproj", "{7C1E4B3A-5D2F-4A8E-9B6C-1F2E3D4C5B6A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LunaCore", "LunaCore\LunaCore.csproj", "{5F51A369-C6A9-4AEF-8B93-689FA76FE976}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LunaCore.Tests", "LunaCore.Tests\LunaCore.Tests.csproj", "{05DE4100-E69A-41DE-A5A7-6A65AF359296}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LunaMCP", "LunaMCP\LunaMCP.csproj", "{4257725D-D0C7-45FF-A34A-6CA688BB17A1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LunaMCP.Tests", "LunaMCP.Tests\LunaMCP.Tests.csproj", "{484C3138-040B-4635-B28A-EACBF412B29A}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7C1E4B3A-5D2F-4A8E-9B6C-1F2E3D4C5B6A}.Debug|x64.ActiveCfg = Debug|x64
+		{7C1E4B3A-5D2F-4A8E-9B6C-1F2E3D4C5B6A}.Debug|x64.Build.0 = Debug|x64
+		{7C1E4B3A-5D2F-4A8E-9B6C-1F2E3D4C5B6A}.Release|x64.ActiveCfg = Release|x64
+		{7C1E4B3A-5D2F-4A8E-9B6C-1F2E3D4C5B6A}.Release|x64.Build.0 = Release|x64
+		{5F51A369-C6A9-4AEF-8B93-689FA76FE976}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{5F51A369-C6A9-4AEF-8B93-689FA76FE976}.Debug|x64.Build.0 = Debug|Any CPU
+		{5F51A369-C6A9-4AEF-8B93-689FA76FE976}.Release|x64.ActiveCfg = Release|Any CPU
+		{5F51A369-C6A9-4AEF-8B93-689FA76FE976}.Release|x64.Build.0 = Release|Any CPU
+		{05DE4100-E69A-41DE-A5A7-6A65AF359296}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{05DE4100-E69A-41DE-A5A7-6A65AF359296}.Debug|x64.Build.0 = Debug|Any CPU
+		{05DE4100-E69A-41DE-A5A7-6A65AF359296}.Release|x64.ActiveCfg = Release|Any CPU
+		{05DE4100-E69A-41DE-A5A7-6A65AF359296}.Release|x64.Build.0 = Release|Any CPU
+		{4257725D-D0C7-45FF-A34A-6CA688BB17A1}.Debug|x64.ActiveCfg = Debug|x64
+		{4257725D-D0C7-45FF-A34A-6CA688BB17A1}.Debug|x64.Build.0 = Debug|x64
+		{4257725D-D0C7-45FF-A34A-6CA688BB17A1}.Release|x64.ActiveCfg = Release|x64
+		{4257725D-D0C7-45FF-A34A-6CA688BB17A1}.Release|x64.Build.0 = Release|x64
+		{484C3138-040B-4635-B28A-EACBF412B29A}.Debug|x64.ActiveCfg = Debug|x64
+		{484C3138-040B-4635-B28A-EACBF412B29A}.Debug|x64.Build.0 = Debug|x64
+		{484C3138-040B-4635-B28A-EACBF412B29A}.Release|x64.ActiveCfg = Release|x64
+		{484C3138-040B-4635-B28A-EACBF412B29A}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+EndGlobal

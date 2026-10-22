@@ -1,0 +1,22 @@
+<Window x:Class="LunaTranscribe.UI.MenuPopup"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:t="clr-namespace:LunaTranscribe.UI.Theme"
+        Title="LunaTranscribe"
+        Width="340" SizeToContent="Height"
+        WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent"
+        Topmost="True" ShowInTaskbar="False" ShowActivated="True"
+        FontFamily="{StaticResource Luna.Font.Text}" FontSize="13" Foreground="{DynamicResource Luna.Ink}"
+        TextOptions.TextFormattingMode="Ideal" UseLayoutRounding="True">
+    <!-- Popover des Infobereich-Symbols (Pendant zu MenuBarView): Status, Diktat, Meeting, letzte Diktate, Hauptfenster. -->
+    <Grid Margin="10,10,10,14">
+        <Border CornerRadius="14" Background="{DynamicResource Luna.Background}">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="18" ShadowDepth="3" Direction="270" Opacity="0.22" />
+            </Border.Effect>
+        </Border>
+        <Border CornerRadius="14" Background="{DynamicResource Luna.Background}" BorderBrush="{DynamicResource Luna.Stroke}" BorderThickness="1" Padding="14">
+            <t:VStack x:Name="Body" Spacing="12" />
+        </Border>
+    </Grid>
+</Window>

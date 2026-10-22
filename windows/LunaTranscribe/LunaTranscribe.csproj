@@ -1,0 +1,78 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- 10.0.19041 = Windows 10 2004: nötig für die WinRT-Projektion (Medienwiedergabe pausieren). -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <UseWPF>true</UseWPF>
+    <!-- WinForms nur für NotifyIcon (Tray) und Screen-Infos. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>LunaTranscribe</AssemblyName>
+    <RootNamespace>LunaTranscribe</RootNamespace>
+    <ApplicationIcon>Assets\LunaTranscribe.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>1.1.0</Version>
+    <Authors>Maximilian Hofmeister</Authors>
+    <Copyright>© 2026 Maximilian Hofmeister</Copyright>
+    <Product>LunaTranscribe</Product>
+    <!-- Release-Publish bringt die .NET-Runtime mit (keine Installation nötig). -->
+    <SelfContained>true</SelfContained>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Offline-ASR via ONNX Runtime: Parakeet TDT v3 + Cohere Transcribe. -->
+    <PackageReference Include="org.k2fsa.sherpa.onnx" Version="1.13.8" />
+    <!-- WASAPI-Aufnahme + Resampling. -->
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <!-- Nachbearbeitung: llama.cpp (GGUF-Modelle LFM2/Qwen3) auf der CPU. -->
+    <PackageReference Include="LLamaSharp" Version="0.27.0" />
+    <PackageReference Include="LLamaSharp.Backend.Cpu" Version="0.27.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LunaCore\LunaCore.csproj" />
+  </ItemGroup>
+
+  <!-- luna-mcp (MCP-Server für Claude) wird mitgebaut und im Unterordner mcp\ ausgeliefert – mit eigener .NET-Runtime
+       und eigener ONNX Runtime. Nicht in den App-Ordner: sherpa-onnx bringt dort eine andere onnxruntime.dll mit.
+       Nur Build-Reihenfolge, keine Assembly-Referenz und keine Pakete (ExcludeAssets) – nichts davon landet im App-Ordner. -->
+  <ItemGroup>
+    <ProjectReference Include="..\LunaMCP\LunaMCP.csproj" ReferenceOutputAssembly="false" Private="false" ExcludeAssets="all" PrivateAssets="all" />
+  </ItemGroup>
+
+  <Target Name="CopyLunaMcp" AfterTargets="Build" Condition="'$(BuildingForLiveUnitTesting)' != 'true'">
+    <MSBuild Projects="..\LunaMCP\LunaMCP.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);Platform=$(Platform)">
+      <Output TaskParameter="TargetOutputs" ItemName="_LunaMcpTargetPath" />
+    </MSBuild>
+    <PropertyGroup>
+      <_LunaMcpOutputDir>%(_LunaMcpTargetPath.RootDir)%(_LunaMcpTargetPath.Directory)</_LunaMcpOutputDir>
+    </PropertyGroup>
+    <Message Importance="normal" Text="luna-mcp: $(_LunaMcpOutputDir) -> $(OutDir)mcp\" />
+    <Error Condition="'$(_LunaMcpOutputDir)' == ''" Text="Ausgabeordner von luna-mcp nicht gefunden." />
+    <ItemGroup>
+      <_LunaMcpFiles Include="$(_LunaMcpOutputDir)**\*" Exclude="$(_LunaMcpOutputDir)**\*.pdb;$(_LunaMcpOutputDir)**\*.lib" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_LunaMcpFiles)" DestinationFiles="@(_LunaMcpFiles->'$(OutDir)mcp\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="PublishLunaMcp" AfterTargets="Publish">
+    <!-- Wiederhergestellt ist luna-mcp bereits (Restore folgt der ProjectReference). -->
+    <MSBuild Projects="..\LunaMCP\LunaMCP.csproj" Targets="Publish"
+             Properties="Configuration=$(Configuration);Platform=$(Platform);PublishDir=$([System.IO.Path]::GetFullPath('$(PublishDir)'))mcp\" />
+  </Target>
+
+  <ItemGroup>
+    <Resource Include="Assets\LunaTranscribe.ico" />
+    <Resource Include="Assets\Fonts\*.ttf" />
+  </ItemGroup>
+
+</Project>

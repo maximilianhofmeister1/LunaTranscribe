@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- luna-mcp: der lokale MCP-Server (stdio) für Claude Code / Claude Desktop. Eigenständiges Programm, das die App
+       im Unterordner mcp\ mitliefert: Es bringt eine eigene ONNX Runtime (Embeddings) mit, die sich so nicht mit der
+       onnxruntime.dll von sherpa-onnx im App-Ordner in die Quere kommt. net8.0-windows für den nativen
+       Bestätigungsdialog (TaskDialog über comctl32, ohne WinForms/WPF). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <!-- Wie die App: bringt die .NET-Runtime mit (keine Installation nötig). -->
+    <SelfContained>true</SelfContained>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>luna-mcp</AssemblyName>
+    <RootNamespace>LunaMCP</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\LunaTranscribe\Assets\LunaTranscribe.ico</ApplicationIcon>
+    <Version>1.1.0</Version>
+    <Product>LunaTranscribe</Product>
+    <Authors>Maximilian Hofmeister</Authors>
+    <Copyright>© 2026 Maximilian Hofmeister</Copyright>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Offizielles C#-SDK für MCP (Kernpaket: Server, Client, stdio; ohne DI-Hosting, das hier nicht gebraucht wird). -->
+    <PackageReference Include="ModelContextProtocol.Core" Version="2.3.0" />
+    <!-- Embeddings für die inhaltliche Suche (multilingual-e5-small, CPU). -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.31.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LunaCore\LunaCore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="LunaMCP.Tests" />
+  </ItemGroup>
+
+  <!-- Import-Bibliotheken (.lib) der ONNX Runtime braucht zur Laufzeit niemand. -->
+  <Target Name="DropNativeImportLibraries" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.lib'" />
+    </ItemGroup>
+  </Target>
+
+</Project>
