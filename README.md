@@ -199,8 +199,8 @@ Umformulierungen (weniger als die Hälfte der Wörter blieb gleich, oder zu unä
 
 ## Meeting-Modus
 
-Menüleiste → **Meeting starten**. Während des Meetings wird nur aufgenommen (16 kHz mono in eine
-temporäre WAV-Datei, kaum CPU-Last) – **Diktieren per Hotkey funktioniert währenddessen ganz normal**
+Menüleiste → **Meeting starten**. Während des Meetings wird nur aufgenommen (16 kHz mono als WAV-Datei direkt
+in die Warteschlange, kaum CPU-Last) – **Diktieren per Hotkey funktioniert währenddessen ganz normal**
 und landet ebenfalls im Meeting-Transkript. Escape wirkt nur auf das Diktat; ein Meeting wird
 ausschließlich über das Menü beendet oder verworfen.
 
@@ -216,6 +216,12 @@ Die Warteschlange liegt unter `~/Library/Application Support/LunaTranscribe/Queu
 Sprache und Personenzahl). **Beendest du die App mit wartenden Meetings, geht es beim nächsten Start weiter.** Schlägt eine
 Verarbeitung fehl, bleibt die Aufnahme erhalten: im Menü „Erneut versuchen“ oder „Verwerfen“. Ein Meeting lässt sich auch
 starten, während die Modelle noch laden – die Verarbeitung wartet dann einfach.
+
+**Absturzsicher:** Die Aufnahme liegt schon während des Meetings in der Warteschlange und wird alle zwei Sekunden auf die
+Platte gesichert. Beendest du die App, fährst den Mac herunter, meldest dich ab oder klappst ihn zu, wird ein laufendes
+Meeting regulär beendet und eingereiht. Stürzt die App ab oder geht der Strom weg, erscheint die Aufnahme beim nächsten
+Start als **„Unterbrochene Aufnahme“** (mit Mitteilung) – „Transkription starten“ verarbeitet sie, „Verwerfen“ löscht
+sie. Automatisch verarbeitet oder gelöscht wird dabei nichts (außer Entwürfen unter einer Sekunde).
 
 Richtwerte: 1 h Meeting ≈ 1–2 min Verarbeitung mit Parakeet, ≈ 5 min mit Cohere – im Hintergrund, parallel zu Diktat
 und neuer Aufnahme. Beim allerersten Mal

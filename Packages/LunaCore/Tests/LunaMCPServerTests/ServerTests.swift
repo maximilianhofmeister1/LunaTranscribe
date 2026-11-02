@@ -197,6 +197,24 @@ struct ReadTests {
         #expect(result.text.contains("fehlgeschlagen: Modell nicht geladen"))
         #expect(result.text.contains("Zuletzt fertig"))
         #expect(result.text.contains("Suchindex"))
+
+        // Laufende Aufnahme (Sperre gehalten) und eine, deren Prozess nicht mehr lebt.
+        var lock: RecordingLock?
+        for active in [true, false] {
+            let draft = MeetingJob(recordedAt: Samples.date.addingTimeInterval(active ? 60 : 120), durationSeconds: 0,
+                                   language: .german, expectedSpeakers: nil, phase: .recording)
+            let draftFolder = MeetingJob.folder(for: draft.id, in: queue)
+            try FileManager.default.createDirectory(at: draftFolder, withIntermediateDirectories: true)
+            try draft.write(in: queue)
+            try Data().write(to: draftFolder.appending(path: MeetingJob.audioFileName))
+            if active { lock = RecordingLock.acquire(at: draftFolder.appending(path: MeetingJob.lockFileName)) }
+        }
+        #expect(lock != nil)
+        let withDrafts = try await client.call("get_processing_status")
+        #expect(withDrafts.text.contains("3 Meeting(s) in der Warteschlange"))
+        #expect(withDrafts.text.contains("Aufnahme läuft gerade"))
+        #expect(withDrafts.text.contains("rettet sie beim nächsten Start"))
+        lock?.release()
     }
 }
 

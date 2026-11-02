@@ -9,12 +9,32 @@ import LunaCore
 /// Nacheinander statt parallel, weil sich Diarizer und Engine sonst um Neural Engine und RAM streiten
 /// und beide Meetings langsamer fertig würden. Invariante: **eine Aufnahme geht nie verloren** – sie
 /// wird erst gelöscht, wenn das Transkript gespeichert ist oder der Nutzer sie verwirft.
+///
+/// Schon während der Aufnahme liegt das Meeting als Auftrag in Phase `recording` hier (`beginRecording`),
+/// gesichert durch eine `RecordingLock`. Stürzt die App ab oder wird der Mac mit laufendem Meeting
+/// ausgeschaltet, findet `RecordingRecovery` den Auftrag beim nächsten Start, repariert die WAV und
+/// zeigt ihn als „Unterbrochene Aufnahme“ – verarbeitet wird er erst auf Klick.
 @MainActor
 final class MeetingProcessingQueue: ObservableObject {
     enum State: Equatable {
         case waiting
         case processing(step: String, fraction: Double)
         case failed(String)
+        /// Gerettete Aufnahme nach Absturz/Herunterfahren; wartet auf „Transkription starten“.
+        case interrupted
+    }
+
+    /// Eine laufende Aufnahme: Auftragsordner mit `job.json` (Phase `recording`) und gehaltener Sperre.
+    struct Recording {
+        let job: MeetingJob
+        let audioURL: URL
+        fileprivate let lock: RecordingLock
+    }
+
+    enum QueueError: LocalizedError {
+        case lockUnavailable
+
+        var errorDescription: String? { "Die Aufnahme konnte nicht vorbereitet werden (Sperrdatei nicht verfügbar)." }
     }
 
     struct Item: Identifiable, Equatable {
@@ -24,6 +44,8 @@ final class MeetingProcessingQueue: ObservableObject {
     }
 
     @Published private(set) var items: [Item] = []
+    /// Beim Start gerettete, unterbrochene Aufnahmen (für die Mitteilung).
+    private(set) var recoveredAtLaunch: [MeetingJob] = []
 
     /// Meldet ein fertig gespeichertes Meeting (Bibliotheks-ID) für die Mitteilung.
     let finished = PassthroughSubject<(title: String, meetingID: UUID), Never>()
@@ -37,20 +59,26 @@ final class MeetingProcessingQueue: ObservableObject {
     private let diarizer = SpeakerDiarizer()
     private var runningTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
-
-    static let audioFileName = "audio.wav"
-    static let jobFileName = "job.json"
+    /// Ordner der Warteschlange (Selbsttests nutzen einen temporären).
+    let folder: URL
 
     /// Läuft gerade eine Verarbeitung?
     var isProcessing: Bool { items.contains(where: \.isProcessing) }
     /// Aufträge, die noch verarbeitet werden (laufend oder wartend).
-    var pendingCount: Int { items.filter { !$0.isFailed }.count }
+    var pendingCount: Int { items.filter { $0.state == .waiting || $0.isProcessing }.count }
+    /// Gerettete Aufnahmen, die auf eine Entscheidung warten.
+    var interruptedCount: Int { items.filter { $0.state == .interrupted }.count }
 
-    init(settings: SettingsStore, models: ModelManager, store: MeetingStore) {
+    /// - Parameters:
+    ///   - folder: Warteschlangen-Ordner.
+    ///   - legacyRecordings: alte Aufnahmen-Ablage (bis 1.1.0), deren Reste beim Start gerettet werden.
+    init(settings: SettingsStore, models: ModelManager, store: MeetingStore,
+         folder: URL = AppPaths.meetingQueue, legacyRecordings: URL? = AppPaths.meetingRecordings) {
         self.settings = settings
         self.models = models
         self.store = store
-        restore()
+        self.folder = folder
+        restore(legacyRecordings: legacyRecordings)
         // Beim Start ist die Engine meist noch nicht geladen – sobald sie bereit ist, weitermachen.
         models.$state
             .removeDuplicates()
@@ -60,28 +88,86 @@ final class MeetingProcessingQueue: ObservableObject {
             .store(in: &cancellables)
     }
 
+    // MARK: Aufnahme
+
+    /// Legt den Auftrag für ein neues Meeting an, bevor das erste Sample geschrieben wird: Ordner,
+    /// Sperre, `job.json` in Phase `recording`. Die Aufnahme schreibt direkt nach `audioURL`.
+    func beginRecording(recordedAt: Date, language: AppLanguage, expectedSpeakers: Int?) throws -> Recording {
+        let job = MeetingJob(recordedAt: recordedAt, durationSeconds: 0, language: language,
+                             expectedSpeakers: expectedSpeakers, phase: .recording)
+        let dir = jobFolder(for: job.id)
+        let fm = FileManager.default
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        // Erst die Sperre, dann job.json – sonst könnte eine zweite Instanz den Entwurf für verwaist halten.
+        guard let lock = RecordingLock.acquire(at: dir.appending(path: MeetingJob.lockFileName)) else {
+            try? fm.removeItem(at: dir)
+            throw QueueError.lockUnavailable
+        }
+        do {
+            try job.write(in: folder)
+        } catch {
+            lock.release()
+            try? fm.removeItem(at: dir)
+            throw error
+        }
+        return Recording(job: job, audioURL: dir.appending(path: MeetingJob.audioFileName), lock: lock)
+    }
+
+    /// Aufnahme ist beendet: Auftrag freigeben und einreihen. Sprache und Sprecherzahl werden jetzt
+    /// festgelegt. Scheitert das Schreiben, bleibt die Aufnahme als unterbrochene erhalten – nie verloren.
+    func finishRecording(_ recording: Recording, durationSeconds: TimeInterval,
+                         language: AppLanguage, expectedSpeakers: Int?) {
+        var job = recording.job
+        job.durationSeconds = durationSeconds
+        job.language = language
+        job.expectedSpeakers = expectedSpeakers
+        job.phase = nil
+        do {
+            try job.write(in: folder)
+            recording.lock.release(removeFile: true)
+            items.append(Item(job: job, state: .waiting))
+            Log.meeting.notice("meeting queued: \(durationSeconds, format: .fixed(precision: 0)) s, \(self.items.count) in queue")
+            processNext()
+        } catch {
+            // job.json sagt weiter `recording`, die Sperre ist frei → spätestens der nächste Start rettet sie.
+            recording.lock.release()
+            job.phase = .interrupted
+            items.append(Item(job: job, state: .interrupted))
+            Log.meeting.error("meeting could not be queued, kept as interrupted: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Aufnahme abgebrochen (Nutzer oder kein Audio): Entwurf samt Datei entfernen.
+    func discardRecording(_ recording: Recording) {
+        recording.lock.release()
+        try? FileManager.default.removeItem(at: jobFolder(for: recording.job.id))
+    }
+
     // MARK: Aufträge
 
-    /// Übernimmt eine beendete Aufnahme: Datei in die Warteschlange verschieben, Auftrag sichern, loslegen.
+    /// Übernimmt eine fertige Aufnahme von außen (Selbsttests): Datei in die Warteschlange verschieben,
+    /// Auftrag sichern, loslegen.
     func enqueue(recording: URL, recordedAt: Date, durationSeconds: TimeInterval,
                  language: AppLanguage, expectedSpeakers: Int?) throws {
         let job = MeetingJob(recordedAt: recordedAt, durationSeconds: durationSeconds,
                              language: language, expectedSpeakers: expectedSpeakers)
-        let folder = Self.folder(for: job.id)
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        try FileManager.default.moveItem(at: recording, to: folder.appending(path: Self.audioFileName))
-        try Self.write(job)
+        let dir = jobFolder(for: job.id)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try FileManager.default.moveItem(at: recording, to: dir.appending(path: MeetingJob.audioFileName))
+        try job.write(in: folder)
         items.append(Item(job: job, state: .waiting))
         Log.meeting.notice("meeting queued: \(durationSeconds, format: .fixed(precision: 0)) s, \(self.items.count) in queue")
         processNext()
     }
 
-    /// Fehlgeschlagenen Auftrag erneut einreihen.
+    /// Fehlgeschlagenen Auftrag erneut einreihen bzw. eine gerettete Aufnahme zur Transkription freigeben.
     func retry(_ id: UUID) {
-        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        guard let index = items.firstIndex(where: { $0.id == id }), !items[index].isProcessing else { return }
         items[index].job.failure = nil
+        items[index].job.phase = nil
         items[index].state = .waiting
-        try? Self.write(items[index].job)
+        // Scheitert das Schreiben, läuft die Verarbeitung trotzdem; die Datei bleibt bis zum Speichern liegen.
+        try? items[index].job.write(in: folder)
         processNext()
     }
 
@@ -93,7 +179,7 @@ final class MeetingProcessingQueue: ObservableObject {
             runningTask = nil
         }
         items.remove(at: index)
-        try? FileManager.default.removeItem(at: Self.folder(for: id))
+        try? FileManager.default.removeItem(at: jobFolder(for: id))
         Log.meeting.notice("meeting job discarded")
         processNext()
     }
@@ -108,7 +194,7 @@ final class MeetingProcessingQueue: ObservableObject {
 
         let job = items[index].job
         items[index].state = .processing(step: "Verarbeitung startet…", fraction: 0)
-        let audioURL = Self.folder(for: job.id).appending(path: Self.audioFileName)
+        let audioURL = jobFolder(for: job.id).appending(path: MeetingJob.audioFileName)
         let transcriber = MeetingTranscriber(diarizer: diarizer, engine: engine)
 
         runningTask = Task.detached(priority: .utility) { [weak self] in
@@ -128,13 +214,13 @@ final class MeetingProcessingQueue: ObservableObject {
 
     private func finish(_ job: MeetingJob, with result: MeetingTranscript) {
         runningTask = nil
-        let folder = Self.folder(for: job.id)
-        let audio = folder.appending(path: Self.audioFileName)
+        let dir = jobFolder(for: job.id)
+        let audio = dir.appending(path: MeetingJob.audioFileName)
         // Mit „Aufnahme behalten“ zieht die WAV in den Meeting-Ordner, sonst wird sie gelöscht.
         let entry = store.add(result, audioURL: settings.meetingKeepAudio ? audio : nil)
 
         if let entry {
-            try? FileManager.default.removeItem(at: folder)
+            try? FileManager.default.removeItem(at: dir)
             items.removeAll { $0.id == job.id }
             finished.send((entry.title, entry.id))
             Log.meeting.notice("meeting processed: \(result.turns.count) turns, saved=\(entry.folder.lastPathComponent, privacy: .public)")
@@ -155,7 +241,7 @@ final class MeetingProcessingQueue: ObservableObject {
         guard let index = items.firstIndex(where: { $0.id == job.id }) else { return }
         items[index].job.failure = message
         items[index].state = .failed(message)
-        try? Self.write(items[index].job)
+        try? items[index].job.write(in: folder)
         failed.send((job.title, message))
         Log.meeting.error("meeting processing failed: \(message, privacy: .public)")
     }
@@ -168,40 +254,44 @@ final class MeetingProcessingQueue: ObservableObject {
 
     // MARK: Persistenz
 
-    /// Aufträge vom letzten Lauf wieder aufnehmen. Ein beim Beenden laufender Auftrag wartet einfach erneut.
-    private func restore() {
-        let fm = FileManager.default
-        guard let folders = try? fm.contentsOfDirectory(at: AppPaths.meetingQueue, includingPropertiesForKeys: nil) else { return }
-        for folder in folders {
-            guard let data = try? Data(contentsOf: folder.appending(path: Self.jobFileName)),
-                  let job = try? Self.decoder.decode(MeetingJob.self, from: data),
-                  fm.fileExists(atPath: folder.appending(path: Self.audioFileName).path) else { continue }
-            items.append(Item(job: job, state: job.failure.map(State.failed) ?? .waiting))
+    /// Aufträge vom letzten Lauf wieder aufnehmen. Ein beim Beenden laufender Auftrag wartet einfach erneut;
+    /// eine beim Beenden laufende Aufnahme wird vorher gerettet.
+    private func restore(legacyRecordings: URL?) {
+        recoveredAtLaunch = runRecovery(legacyRecordings: legacyRecordings).recovered
+        for job in MeetingJob.readAll(in: folder) {
+            switch job.phase {
+            case .recording: continue   // läuft gerade in einem anderen Prozess (Sperre gehalten)
+            case .interrupted: items.append(Item(job: job, state: .interrupted))
+            case nil: items.append(Item(job: job, state: job.failure.map(State.failed) ?? .waiting))
+            }
         }
-        items.sort { $0.job.recordedAt < $1.job.recordedAt }
         if !items.isEmpty { Log.meeting.notice("restored \(self.items.count) queued meeting(s)") }
     }
 
-    private static func folder(for id: UUID) -> URL {
-        AppPaths.meetingQueue.appending(path: id.uuidString, directoryHint: .isDirectory)
+    /// Sucht verwaiste Aufnahmen (Sperre frei) und zeigt sie als unterbrochen an. Sicher jederzeit
+    /// aufrufbar – die eigene laufende Aufnahme hält ihre Sperre und bleibt unberührt.
+    @discardableResult
+    func recoverInterruptedRecordings() -> [MeetingJob] {
+        let recovered = runRecovery(legacyRecordings: nil).recovered
+        for job in recovered where !items.contains(where: { $0.id == job.id }) {
+            items.append(Item(job: job, state: .interrupted))
+        }
+        items.sort { $0.job.recordedAt < $1.job.recordedAt }
+        return recovered
     }
 
-    private static func write(_ job: MeetingJob) throws {
-        try encoder.encode(job).write(to: folder(for: job.id).appending(path: jobFileName), options: .atomic)
+    private func runRecovery(legacyRecordings: URL?) -> RecordingRecovery.Report {
+        let report = RecordingRecovery.run(queueFolder: folder, legacyFolder: legacyRecordings,
+                                           legacyLanguage: settings.languageForEngine(settings.primaryLanguage))
+        if !report.recovered.isEmpty || report.discardedEmpty > 0 || !report.unrepairable.isEmpty {
+            Log.meeting.notice("recovery: \(report.recovered.count) interrupted recording(s) rescued, \(report.discardedEmpty) empty draft(s) removed, \(report.skippedActive) active, unrepairable: \(report.unrepairable, privacy: .public)")
+        }
+        return report
     }
 
-    private static let encoder: JSONEncoder = {
-        let e = JSONEncoder()
-        e.outputFormatting = [.prettyPrinted, .sortedKeys]
-        e.dateEncodingStrategy = .iso8601
-        return e
-    }()
-
-    private static let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
-        return d
-    }()
+    private func jobFolder(for id: UUID) -> URL {
+        MeetingJob.folder(for: id, in: folder)
+    }
 }
 
 extension MeetingProcessingQueue.Item {

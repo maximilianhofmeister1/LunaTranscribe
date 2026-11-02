@@ -251,9 +251,11 @@ enum ReadTools {
             let recordedAt: String
             let durationSeconds: Int
             let failure: String?
+            /// recording | interrupted | failed | waiting
+            let state: String
 
             enum CodingKeys: String, CodingKey {
-                case failure
+                case failure, state
                 case recordedAt = "recorded_at"
                 case durationSeconds = "duration_seconds"
             }
@@ -275,7 +277,8 @@ enum ReadTools {
             title: "Verarbeitungsstand",
             description: """
             Zeigt, ob beendete Meetings noch verarbeitet werden (Sprechererkennung, Transkription) oder fehlgeschlagen \
-            sind, welches Meeting zuletzt fertig wurde, und den Stand des Suchindex. Nützlich bei „Ist mein Meeting von \
+            sind, ob gerade aufgenommen wird oder eine unterbrochene Aufnahme wartet, welches Meeting zuletzt fertig \
+            wurde, und den Stand des Suchindex. Nützlich bei „Ist mein Meeting von \
             eben schon fertig?“.
             """,
             inputSchema: Schema.object([:]),
@@ -285,7 +288,8 @@ enum ReadTools {
                     "recorded_at": ["type": "string"],
                     "duration_seconds": ["type": "integer"],
                     "failure": ["type": "string"],
-                ], required: ["recorded_at", "duration_seconds"])],
+                    "state": ["type": "string", "enum": ["recording", "interrupted", "failed", "waiting"]],
+                ], required: ["recorded_at", "duration_seconds", "state"])],
                 "latest_meeting": MeetingInfo.schema,
                 "index": ["type": "string"],
             ], required: ["pending", "index"])
@@ -296,10 +300,25 @@ enum ReadTools {
         let jobs = MeetingJob.readAll(in: context.environment.queueFolder)
         let output = StatusOutput(
             pending: jobs.map { .init(recordedAt: ISO8601DateFormatter().string(from: $0.recordedAt),
-                                      durationSeconds: Int($0.durationSeconds.rounded()), failure: $0.failure) },
+                                      durationSeconds: Int($0.durationSeconds.rounded()), failure: $0.failure,
+                                      state: jobState($0, queueFolder: context.environment.queueFolder).rawValue) },
             latestMeeting: context.snapshot.meetings.first.map(MeetingInfo.init),
             index: await context.search.stats(snapshot: context.snapshot, settings: context.settings))
         return try .structured(text, output)
+    }
+
+    enum JobState: String {
+        case recording, interrupted, failed, waiting
+    }
+
+    /// Eine `recording`-Phase ohne gehaltene Sperre ist eine abgebrochene Aufnahme, die die App beim
+    /// nächsten Start rettet – für Claude also schon „unterbrochen“.
+    static func jobState(_ job: MeetingJob, queueFolder: URL) -> JobState {
+        switch job.phase {
+        case .recording: job.isRecordingActive(in: queueFolder) ? .recording : .interrupted
+        case .interrupted: .interrupted
+        case nil: job.failure == nil ? .waiting : .failed
+        }
     }
 
     /// Gemeinsam mit der Ressource `luna://status`.
@@ -311,9 +330,16 @@ enum ReadTools {
         } else {
             lines.append("\(jobs.count) Meeting(s) in der Warteschlange (älteste zuerst):")
             for job in jobs {
-                let state = job.failure.map { "fehlgeschlagen: \($0) – in LunaTranscribe erneut versuchen oder verwerfen" }
-                    ?? "wartet bzw. wird verarbeitet"
-                lines.append("- Aufnahme vom \(Rendering.date(job.recordedAt)), \(MeetingTranscript.clock(job.durationSeconds)) – \(state)")
+                let state = switch jobState(job, queueFolder: context.environment.queueFolder) {
+                case .recording: "Aufnahme läuft gerade"
+                case .interrupted: job.phase == .interrupted
+                    ? "unterbrochene Aufnahme (App wurde während des Meetings beendet), gerettet – wartet in LunaTranscribe auf „Transkription starten“ oder „Verwerfen“"
+                    : "Aufnahme wurde unterbrochen (App beendet oder abgestürzt) – LunaTranscribe rettet sie beim nächsten Start"
+                case .failed: "fehlgeschlagen: \(job.failure ?? "") – in LunaTranscribe erneut versuchen oder verwerfen"
+                case .waiting: "wartet bzw. wird verarbeitet"
+                }
+                let duration = job.phase == .recording ? "" : ", \(MeetingTranscript.clock(job.durationSeconds))"
+                lines.append("- Aufnahme vom \(Rendering.date(job.recordedAt))\(duration) – \(state)")
             }
         }
         if let latest = context.snapshot.meetings.first {

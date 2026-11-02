@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import Accelerate
 import CoreAudio
+import LunaCore
 
 enum AudioRecorderError: LocalizedError {
     case noInput
@@ -24,6 +25,7 @@ enum RecordingSink {
     /// Im RAM puffern; `stop()` gibt die Samples zurück (Diktat, wenige Sekunden).
     case memory
     /// Direkt in eine WAV-Datei schreiben (Meeting) – RAM bleibt konstant, egal wie lang die Aufnahme dauert.
+    /// Absturzsicher: Der Kopf wird alle paar Sekunden nachgetragen (`WAVWriter`).
     case file(URL)
 }
 
@@ -62,7 +64,7 @@ final class AudioRecorder {
     private var backend: Backend?
     private let lock = NSLock()
     private var samples: [Float] = []
-    private var file: AVAudioFile?
+    private var file: WAVWriter?
     private var recordedFrames = 0
 
     /// Aktueller Spitzenpegel 0…1 (für die Pegelanzeige im Overlay).
@@ -132,7 +134,12 @@ final class AudioRecorder {
         firstBufferSeen = false
 
         if case .file(let url) = sink {
-            let file = try Self.openWavForWriting(at: url, format: mono)
+            let file: WAVWriter
+            do {
+                file = try WAVWriter(url: url, sampleRate: Int(Self.targetSampleRate))
+            } catch {
+                throw AudioRecorderError.fileUnwritable(url.path)
+            }
             lock.lock(); self.file = file; lock.unlock()
         }
 
@@ -168,31 +175,15 @@ final class AudioRecorder {
         lock.lock()
         let out = samples
         samples = []
-        file = nil   // AVAudioFile schließt beim Freigeben und schreibt den Header fertig
+        let file = self.file
+        self.file = nil
         lock.unlock()
+        file?.close()   // vollständiger Kopf, synchronisiert
         level = 0
         return out
     }
 
     // MARK: Intern
-
-    private static func openWavForWriting(at url: URL, format: AVAudioFormat) throws -> AVAudioFile {
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let settings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatLinearPCM,
-            AVSampleRateKey: format.sampleRate,
-            AVNumberOfChannelsKey: 1,
-            AVLinearPCMBitDepthKey: 32,
-            AVLinearPCMIsFloatKey: true,
-            AVLinearPCMIsBigEndianKey: false,
-            AVLinearPCMIsNonInterleaved: false,
-        ]
-        do {
-            return try AVAudioFile(forWriting: url, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
-        } catch {
-            throw AudioRecorderError.fileUnwritable(url.path)
-        }
-    }
 
     private func append(_ buffer: AVAudioPCMBuffer, converter: AVAudioConverter,
                         resampled: AVAudioFormat, mono: AVAudioFormat, groups: [[Int]]) {
@@ -236,7 +227,7 @@ final class AudioRecorder {
         defer { lock.unlock() }
         recordedFrames += n
         if let file {
-            try? file.write(from: monoBuffer)
+            file.append(UnsafeBufferPointer(start: monoSamples, count: n))   // kopiert, schreibt auf eigener Queue
         } else {
             samples.append(contentsOf: UnsafeBufferPointer(start: monoSamples, count: n))
         }

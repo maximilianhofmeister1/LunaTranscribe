@@ -7,10 +7,13 @@ import UserNotifications
 /// Die Erlaubnis wird erst beim ersten beendeten Meeting erfragt, also dann, wenn der Nutzer versteht wofür.
 @MainActor
 final class MeetingNotifier: NSObject, UNUserNotificationCenterDelegate {
-    private static let meetingIDKey = "meetingID"
+    private nonisolated static let meetingIDKey = "meetingID"
+    private nonisolated static let openMeetingsKey = "openMeetings"
 
     /// Wird mit der Meeting-ID aufgerufen, wenn der Nutzer auf eine Fertig-Mitteilung klickt.
     var onOpenMeeting: ((UUID) -> Void)?
+    /// Klick auf die Mitteilung über gerettete Aufnahmen: Meetings-Seite öffnen.
+    var onOpenMeetings: (() -> Void)?
 
     private var center: UNUserNotificationCenter { .current() }
 
@@ -40,6 +43,21 @@ final class MeetingNotifier: NSObject, UNUserNotificationCenterDelegate {
              body: "„\(title)“: \(message) Die Aufnahme bleibt erhalten – im Menü erneut versuchen.", userInfo: [:])
     }
 
+    /// Beim Start wurden unterbrochene Aufnahmen gerettet. Fragt die Erlaubnis bei Bedarf selbst an –
+    /// die Mitteilung kommt direkt beim Start, vor dem ersten eingereihten Meeting.
+    func recordingsRecovered(count: Int) {
+        let body = count == 1
+            ? "Ein Meeting lief noch, als LunaTranscribe beendet wurde. Die Aufnahme ist gesichert – klicken, um sie zu transkribieren oder zu verwerfen."
+            : "\(count) Meetings liefen noch, als LunaTranscribe beendet wurde. Die Aufnahmen sind gesichert – klicken, um sie zu transkribieren oder zu verwerfen."
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            guard granted else { return }
+            Task { @MainActor in
+                self.post(title: count == 1 ? "Unterbrochene Meeting-Aufnahme gerettet" : "Unterbrochene Meeting-Aufnahmen gerettet",
+                          body: body, userInfo: [Self.openMeetingsKey: "1"])
+            }
+        }
+    }
+
     private func post(title: String, body: String, userInfo: [String: String]) {
         let content = UNMutableNotificationContent()
         content.title = title
@@ -61,9 +79,15 @@ final class MeetingNotifier: NSObject, UNUserNotificationCenterDelegate {
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                             withCompletionHandler completionHandler: @escaping () -> Void) {
-        let idString = response.notification.request.content.userInfo[Self.meetingIDKey] as? String
+        let userInfo = response.notification.request.content.userInfo
+        let idString = userInfo[Self.meetingIDKey] as? String
+        let openMeetings = userInfo[Self.openMeetingsKey] != nil
         Task { @MainActor in
-            if let idString, let id = UUID(uuidString: idString) { self.onOpenMeeting?(id) }
+            if let idString, let id = UUID(uuidString: idString) {
+                self.onOpenMeeting?(id)
+            } else if openMeetings {
+                self.onOpenMeetings?()
+            }
             completionHandler()
         }
     }

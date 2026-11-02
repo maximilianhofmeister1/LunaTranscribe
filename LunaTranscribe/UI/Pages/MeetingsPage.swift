@@ -38,7 +38,7 @@ struct MeetingsPage: View {
 
             if !state.meetingQueue.items.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("In Verarbeitung")
+                    Text(state.meetingQueue.pendingCount > 0 ? "In Verarbeitung" : "Nicht verarbeitet")
                         .font(LunaFont.caption(11, weight: .semibold))
                         .textCase(.uppercase)
                         .foregroundStyle(LunaColor.inkMuted)

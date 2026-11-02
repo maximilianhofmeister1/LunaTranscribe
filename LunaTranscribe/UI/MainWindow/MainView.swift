@@ -87,6 +87,13 @@ private struct Sidebar: View {
                     .font(LunaFont.caption(12, weight: .medium))
                     .foregroundStyle(LunaColor.lavender)
             }
+            if state.meetingQueue.interruptedCount > 0 {
+                Label(state.meetingQueue.interruptedCount == 1 ? "1 unterbrochene Aufnahme"
+                                                               : "\(state.meetingQueue.interruptedCount) unterbrochene Aufnahmen",
+                      systemImage: "arrow.uturn.backward.circle")
+                    .font(LunaFont.caption(12, weight: .medium))
+                    .foregroundStyle(LunaColor.honey)
+            }
             Text("Lokal auf diesem Mac · Open Source")
                 .font(LunaFont.caption(10.5))
                 .foregroundStyle(LunaColor.inkMuted.opacity(0.8))
