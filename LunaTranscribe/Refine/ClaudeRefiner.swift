@@ -11,8 +11,10 @@ import os
 final class ClaudeRefiner: TextRefiner {
     let kind: RefinerKind = .claudeHaiku
 
-    /// Modell-Alias der CLI – zeigt immer auf das aktuelle Haiku.
-    static let model = "haiku"
+    /// Explizite Modell-ID statt des Alias `haiku`: Ältere CLI-Versionen lösen den Alias noch auf
+    /// Haiku 4.5 auf, das im Test (2026-11-02) 10–75 s brauchte; Haiku 5.5 antwortet in 0,6–2,3 s.
+    /// Kennt die CLI die ID nicht, warnt sie nur auf stderr und reicht sie trotzdem durch.
+    static let model = "claude-haiku-5-5"
     static let effort = "low"
 
     /// Großzügiger als bei MLX: Die CLI startet bei jedem Diktat neu und braucht das Netz.

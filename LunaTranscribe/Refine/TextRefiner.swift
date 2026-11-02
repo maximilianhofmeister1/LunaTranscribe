@@ -18,7 +18,7 @@ enum RefinerKind: String, CaseIterable, Identifiable {
         case .qwen3_1_7b: return "Qwen3 1.7B (genauer – ~1 s pro Diktat, ~1 GB Download, ~1,3 GB RAM)"
         case .qwen3_4b: return "Qwen3 4B (beste Qualität – ~2–3 s pro Diktat, ~2,3 GB Download, ~2,8 GB RAM)"
         case .appleIntelligence: return "Apple Intelligence (Systemmodell, kein Download, macOS 26+)"
-        case .claudeHaiku: return "Claude Haiku (Cloud über die Claude CLI – ~3–5 s pro Diktat, kein Download, kein RAM)"
+        case .claudeHaiku: return "Claude Haiku 5.5 (Cloud über die Claude CLI – ~3–5 s pro Diktat, kein Download, kein RAM)"
         }
     }
 

@@ -124,7 +124,7 @@ Modelle (Einstellungen → Nachbearbeitung), Richtwerte für ein Diktat mit 2–
 | **Qwen3 1.7B** | ~1 GB | ~1,3 GB | ~1 s | Konservativ: lässt Selbstkorrekturen lieber stehen („um zehn, nein um elf Uhr“); gutes Englisch |
 | **Qwen3 4B** | ~2,3 GB | ~2,8 GB | ~2–2,5 s | Löst Selbstkorrekturen innerhalb eines Satzes („am Montag nein am Dienstag … bei mir nein bei dir“ → „am Dienstag … bei dir“) |
 | **Apple Intelligence** | – | – | ~1 s | Apples Systemmodell (macOS 26+), läuft auf der Neural Engine. Ausgegraut, solange Apple Intelligence nicht aktiv ist |
-| **Claude Haiku** | – | – | ~3–5 s | **Cloud** über die lokale Claude CLI (`--model haiku --effort low`), dein Claude-Konto, kein API-Schlüssel. Das Diktat geht an Anthropic |
+| **Claude Haiku 5.5** | – | – | ~3–5 s | **Cloud** über die lokale Claude CLI (`--model claude-haiku-5-5 --effort low`), dein Claude-Konto, kein API-Schlüssel. Das Diktat geht an Anthropic |
 
 Grenze aller drei: Wird ein **ganzer Satz** wiederholt und korrigiert („Heute ist ein schöner Tag. Nein, morgen ist ein
 schöner Tag …“), lesen sie das „nein“ als Fortsetzung und behalten beide Sätze – dafür bräuchte es ein größeres Modell
