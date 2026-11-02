@@ -73,7 +73,8 @@ struct ClaudeCLI: Sendable {
     }
 
     /// Schickt `input` mit der System-Anweisung `instructions` an Claude und gibt die Antwort zurück.
-    func complete(instructions: String, input: String, model: String?, timeout: TimeInterval = 300) async throws -> String {
+    /// - Parameter effort: Aufwandsstufe der CLI (`low` … `max`); `nil` = Standard.
+    func complete(instructions: String, input: String, model: String?, effort: String? = nil, timeout: TimeInterval = 300) async throws -> String {
         var arguments = [
             "-p",
             "--tools", "",
@@ -85,6 +86,7 @@ struct ClaudeCLI: Sendable {
             "--system-prompt", instructions,
         ]
         if let model, !model.isEmpty { arguments += ["--model", model] }
+        if let effort { arguments += ["--effort", effort] }
         let output = try await execute(arguments: arguments, input: input, timeout: timeout)
         guard !output.isEmpty else { throw CLIError.emptyOutput }
         return output

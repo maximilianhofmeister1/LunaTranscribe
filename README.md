@@ -3,7 +3,7 @@
 Lokale Diktier-App für die macOS-Menüleiste. Hotkey drücken → sprechen → Text wird in die aktive App eingefügt.
 Läuft komplett offline auf Apple Silicon (CoreML / Neural Engine) mit **Cohere Transcribe** oder **Parakeet TDT v3**.
 Dazu ein **Meeting-Modus**: Gespräch aufnehmen (Mikrofon + Systemaudio), danach Sprecher erkennen und als Text/Markdown exportieren.
-Und ein dritter Hotkey mit **Nachbearbeitung**: Ein lokales Sprachmodell (LFM2, Qwen3 oder Apple Intelligence) bereinigt
+Und ein dritter Hotkey mit **Nachbearbeitung**: Ein lokales Sprachmodell (LFM2, Qwen3 oder Apple Intelligence) – oder auf Wunsch Claude Haiku über die Claude CLI – bereinigt
 das Diktat – Rechtschreibung, Grammatik, Füllwörter, Wiederholungen, Versprecher – bevor es eingefügt wird.
 Ein **eigenes Wörterbuch** sorgt dafür, dass Namen und Fachbegriffe richtig geschrieben werden – und **lernt aus
 deinen Korrekturen**. Meetings landen als JSON in einer **Meeting-Bibliothek** in einem frei wählbaren Ordner und lassen
@@ -109,7 +109,7 @@ Fassung wieder her. Die Beispielpaare (Deutsch/Englisch) hängt die App automati
 Im Menü gibt es neben „Diktat starten“ auch „Diktat + Nachbearbeitung“ – identisch mit Hotkey 3.
 Meeting-Transkripte sind nicht betroffen.
 
-**Sicherheitsnetz:** Schlägt die Nachbearbeitung fehl (Modell lädt noch, Fehler, Timeout 20 s, unplausible Antwort),
+**Sicherheitsnetz:** Schlägt die Nachbearbeitung fehl (Modell lädt noch, Fehler, Timeout 20 s bzw. 30 s bei Claude, unplausible Antwort),
 wird der Rohtext eingefügt und das Overlay sagt es. Ein Diktat geht nie verloren. Im Verlauf („Letzte Diktate“) sind
 nachbearbeitete Einträge mit ✨ markiert; der Rohtext steht im Tooltip.
 
@@ -121,6 +121,7 @@ Modelle (Einstellungen → Nachbearbeitung), Richtwerte für ein Diktat mit 2–
 | **Qwen3 1.7B** | ~1 GB | ~1,3 GB | ~1 s | Konservativ: lässt Selbstkorrekturen lieber stehen („um zehn, nein um elf Uhr“); gutes Englisch |
 | **Qwen3 4B** | ~2,3 GB | ~2,8 GB | ~2–2,5 s | Löst Selbstkorrekturen innerhalb eines Satzes („am Montag nein am Dienstag … bei mir nein bei dir“ → „am Dienstag … bei dir“) |
 | **Apple Intelligence** | – | – | ~1 s | Apples Systemmodell (macOS 26+), läuft auf der Neural Engine. Ausgegraut, solange Apple Intelligence nicht aktiv ist |
+| **Claude Haiku** | – | – | ~3–5 s | **Cloud** über die lokale Claude CLI (`--model haiku --effort low`), dein Claude-Konto, kein API-Schlüssel. Das Diktat geht an Anthropic |
 
 Grenze aller drei: Wird ein **ganzer Satz** wiederholt und korrigiert („Heute ist ein schöner Tag. Nein, morgen ist ein
 schöner Tag …“), lesen sie das „nein“ als Fortsetzung und behalten beide Sätze – dafür bräuchte es ein größeres Modell
@@ -134,6 +135,11 @@ Fehlt der Eintrag „Apple Intelligence“ in den Systemeinstellungen, liegt das
 Gerätesprache nicht übereinstimmen** (z. B. Siri Englisch, Gerät Deutsch) – beide auf dieselbe unterstützte Sprache
 stellen. Seit macOS 15.4 ist Apple Intelligence auch in der EU verfügbar. Die Einstellungen zeigen den konkreten Grund.
 Apples Inhaltsfilter können in seltenen Fällen einen Text ablehnen – dann greift das Sicherheitsnetz.
+
+**Claude Haiku** nutzt dieselbe Claude CLI wie die Meeting-Zusammenfassung (Pfad: Einstellungen → Meetings) – ohne
+Werkzeuge, MCP-Server, Projekteinstellungen oder gespeicherte Sitzung, mit niedrigem Aufwand. Die CLI startet bei jedem
+Diktat neu, deshalb dauert es länger als lokal. Ist sie nicht angemeldet, sagt das Overlay „Claude CLI nicht angemeldet“
+und fügt den Rohtext ein – dann im Terminal einmal `claude` starten und anmelden.
 
 ## Eigenes Wörterbuch
 
@@ -337,7 +343,8 @@ Technik und Entscheidungen: [docs/MCP-Server-Plan.md](docs/MCP-Server-Plan.md).
 - Meeting-Audio liegt während Aufnahme und Verarbeitung temporär unter `~/Library/Caches/LunaTranscribe/Meetings`
   und wird danach gelöscht – außer „Aufnahme behalten“ ist aktiv, dann wandert die WAV in den Meeting-Ordner.
   Transkripte liegen als `meeting.json` im Meeting-Ordner.
-- Der Rohtext eines Diktats mit Nachbearbeitung geht nur in das lokale Sprachmodell auf diesem Mac.
+- Der Rohtext eines Diktats mit Nachbearbeitung geht nur in das lokale Sprachmodell auf diesem Mac – außer du wählst
+  Claude Haiku, dann geht er über die Claude CLI an Anthropic.
 - Keine Analytics, kein Account. Netzwerk nur für den einmaligen Modell-Download (ASR + Sprecher-Modelle + Sprachmodell +
   Wörterbuch-Zusatzmodell, optional Embedding-Modell) – und, **nur auf Klick**, für eine Meeting-Zusammenfassung über die
   Claude CLI (Text an Anthropic).

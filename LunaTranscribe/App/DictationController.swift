@@ -239,6 +239,10 @@ final class DictationController: ObservableObject {
             return (refined, nil)
         } catch is CancellationError {
             return (rawText, nil)
+        } catch RefinerError.unavailable(let reason) {
+            // Z. B. Claude CLI nicht angemeldet – der Grund hilft mehr als ein allgemeiner Hinweis.
+            Log.refine.error("refine unavailable: \(reason, privacy: .public)")
+            return (rawText, "\(reason) – Rohtext eingefügt.")
         } catch {
             Log.refine.error("refine failed: \(error.localizedDescription, privacy: .public)")
             return (rawText, "Nachbearbeitung fehlgeschlagen – Rohtext eingefügt.")
