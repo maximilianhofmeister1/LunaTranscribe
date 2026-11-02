@@ -50,6 +50,9 @@ enum UISnapshotSelfTest {
         // Ein wartender Hintergrund-Auftrag (Modelle sind nicht geladen, er bleibt also „wartend“).
         let queuedID = try enqueueSilentMeeting(state: state)
         defer { if let queuedID { state.meetingQueue.discard(queuedID) } }
+        // Eine gerettete, unterbrochene Aufnahme (wie nach einem Absturz mitten im Meeting).
+        let interruptedID = try addInterruptedRecording(state: state)
+        defer { state.meetingQueue.discard(interruptedID) }
 
         for (name, appearance) in [("hell", NSAppearance.Name.aqua), ("dunkel", .darkAqua)] {
             for page in MainPage.allCases {
@@ -99,6 +102,21 @@ enum UISnapshotSelfTest {
         try state.meetingQueue.enqueue(recording: url, recordedAt: Date(), durationSeconds: 1_834,
                                        language: .german, expectedSpeakers: nil)
         return state.meetingQueue.items.last?.id
+    }
+
+    /// Legt einen verwaisten Entwurf (Phase `recording`, Sperre frei, 1 s Stille) in die Warteschlange und
+    /// lässt ihn retten – derselbe Weg wie beim Start nach einem Absturz.
+    private static func addInterruptedRecording(state: AppState) throws -> UUID {
+        let job = MeetingJob(recordedAt: Date().addingTimeInterval(-7_200), durationSeconds: 0, language: .german,
+                             expectedSpeakers: nil, phase: .recording)
+        let folder = MeetingJob.folder(for: job.id, in: state.meetingQueue.folder)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try job.write(in: state.meetingQueue.folder)
+        let writer = try WAVWriter(url: folder.appending(path: MeetingJob.audioFileName), sampleRate: 16_000)
+        writer.append([Float](repeating: 0, count: 16_000 * 2_710 / 1_000))
+        writer.close()
+        state.meetingQueue.recoverInterruptedRecordings()
+        return job.id
     }
 
     private static func sampleMeeting() -> MeetingTranscript {

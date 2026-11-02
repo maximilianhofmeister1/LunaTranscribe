@@ -132,7 +132,7 @@ struct MenuBarView: View {
                 Divider().padding(.vertical, 2)
                 Text("Im Hintergrund").font(LunaFont.caption(11, weight: .semibold)).foregroundStyle(LunaColor.inkMuted)
                 MeetingQueueView(queue: state.meetingQueue, compact: true)
-                if !state.models.isReady {
+                if !state.models.isReady && state.meetingQueue.pendingCount > 0 {
                     Hint("Startet, sobald das Modell geladen ist.")
                 }
             }

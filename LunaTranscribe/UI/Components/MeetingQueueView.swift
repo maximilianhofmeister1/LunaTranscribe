@@ -2,7 +2,8 @@ import LunaCore
 import SwiftUI
 
 /// Meetings in der Hintergrund-Verarbeitung: Fortschritt, Wartende, Fehlgeschlagene mit
-/// „Erneut versuchen“ / „Verwerfen“. Genutzt im Menü-Popover und auf der Meetings-Seite.
+/// „Erneut versuchen“ / „Verwerfen“, gerettete (unterbrochene) Aufnahmen mit „Transkription starten“.
+/// Genutzt im Menü-Popover und auf der Meetings-Seite.
 struct MeetingQueueView: View {
     @ObservedObject var queue: MeetingProcessingQueue
     /// Kompakte Darstellung fürs Popover.
@@ -62,6 +63,17 @@ struct MeetingQueueView: View {
                     Button("Verwerfen") { confirmDiscard = item.job }.buttonStyle(.lunaQuiet)
                 }
                 .font(LunaFont.caption(11))
+            case .interrupted:
+                Text("Unterbrochene Aufnahme – LunaTranscribe wurde während des Meetings beendet. Bis dahin ist alles gesichert.")
+                    .font(LunaFont.caption(11))
+                    .foregroundStyle(LunaColor.inkMuted)
+                    .lineLimit(compact ? 3 : 4)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 4) {
+                    Button("Transkription starten") { queue.retry(item.id) }.buttonStyle(.lunaSecondary)
+                    Button("Verwerfen") { confirmDiscard = item.job }.buttonStyle(.lunaQuiet)
+                }
+                .font(LunaFont.caption(11))
             }
         }
     }
@@ -72,6 +84,7 @@ struct MeetingQueueView: View {
         case .processing: ProgressView().controlSize(.mini)
         case .waiting: Image(systemName: "hourglass").foregroundStyle(LunaColor.inkMuted)
         case .failed: Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(LunaColor.rose)
+        case .interrupted: Image(systemName: "arrow.uturn.backward.circle.fill").foregroundStyle(LunaColor.honey)
         }
     }
 }

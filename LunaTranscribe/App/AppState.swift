@@ -56,7 +56,7 @@ final class AppState: ObservableObject {
         forwardChanges(of: settings)
         bindModels(preload: preloadModels)
         bindVocabulary()
-        bindMeeting()
+        bindMeeting(announceRecovered: preloadModels)
         registerHotkeys()
         overlay.bind(to: dictation)
         // Escape bricht nur das Diktat ab – ein Meeting wird bewusst nur über das Menü beendet,
@@ -124,10 +124,16 @@ final class AppState: ObservableObject {
             .store(in: &cancellables)
     }
 
-    private func bindMeeting() {
+    /// - Parameter announceRecovered: gerettete Aufnahmen per Mitteilung melden (nicht in Selbsttests).
+    private func bindMeeting(announceRecovered: Bool) {
         // Hintergrund-Verarbeitung meldet sich per Mitteilung statt per Fenster – stört nicht, auch
         // nicht mitten im nächsten Meeting. Ein Klick auf die Mitteilung öffnet das Meeting.
         notifier.onOpenMeeting = { [weak self] id in self?.openMeeting(id) }
+        notifier.onOpenMeetings = { [weak self] in self?.openMainWindow(.meetings) }
+        // Beim letzten Lauf unterbrochene Aufnahmen (Absturz, Herunterfahren): melden, nicht verarbeiten.
+        if announceRecovered, !meetingQueue.recoveredAtLaunch.isEmpty {
+            notifier.recordingsRecovered(count: meetingQueue.recoveredAtLaunch.count)
+        }
         meetingQueue.finished
             .sink { [weak self] title, id in self?.notifier.meetingFinished(title: title, meetingID: id) }
             .store(in: &cancellables)
