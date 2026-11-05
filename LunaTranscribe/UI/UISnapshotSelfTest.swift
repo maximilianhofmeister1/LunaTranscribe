@@ -69,7 +69,19 @@ enum UISnapshotSelfTest {
             state.router.settingsSection = .general
             try await render(MenuBarView().environmentObject(state), size: NSSize(width: 320, height: 420),
                              appearance: appearance, titled: false, to: output.appending(path: "menubar-\(name).png"))
+            let summarySize = NSSize(width: 760, height: 620)
+            try await render(summarySnapshot(size: summarySize), size: summarySize, appearance: appearance,
+                             titled: false, to: output.appending(path: "summary-\(name).png"))
         }
+    }
+
+    /// Der Tab „Zusammenfassung“ öffnet erst per Klick, deshalb wird sein Inhalt einzeln gerendert.
+    private static func summarySnapshot(size: NSSize) -> some View {
+        MarkdownView(markdown: sampleSummary)
+            .lunaCard(padding: 20)
+            .padding(LunaMetrics.cardPadding)
+            .frame(width: size.width, height: size.height, alignment: .top)
+            .background(LunaColor.background)
     }
 
     /// `titled`: Hauptfenster mit (transparenter) Titelleiste; das Popover ist rahmenlos.
@@ -132,18 +144,36 @@ enum UISnapshotSelfTest {
         var meeting = MeetingTranscript(title: "Launch-Planung v0.2", date: Date().addingTimeInterval(-3600), durationSeconds: 58,
                                         engine: .parakeet, language: .german, turns: turns,
                                         speakerNames: ["Sprecher 1": "Anna", "Sprecher 2": "Markus"])
-        meeting.summary = MeetingSummary(markdown: """
-        ## Kurzfassung
-        Der Launch der neuen Version wird auf **Montag** verschoben, weil die Tests noch laufen.
-
-        ## Entscheidungen
-        - Launch am Montag
-
-        ## Aufgaben
-        - [ ] Markus: Testbericht und weclapp-Export schicken (Freitag)
-        """, createdAt: Date(), model: "sonnet")
+        meeting.summary = MeetingSummary(markdown: sampleSummary, createdAt: Date(), model: "sonnet")
         return meeting
     }
+
+    /// Aufbau wie echte Zusammenfassungen: Oberpunkte mit Unterpunkten, Leerzeile dazwischen, eine
+    /// dritte Ebene und ein Punkt, der umbricht – so zeigt der Snapshot die Einrückung vollständig.
+    private static let sampleSummary = """
+    # Launch-Planung v0.2
+
+    ## Kurzfassung
+    Der Launch der neuen Version wird auf **Montag** verschoben, weil die Tests noch laufen.
+
+    ## Themen
+    - **Launch-Termin**
+      - Die Tests laufen noch, der ursprüngliche Termin ist nicht zu halten
+      - Montag ist der früheste Tag, an dem Testbericht und weclapp-Export gemeinsam vorliegen und das Team den Release ohne Wochenendbereitschaft begleiten kann
+
+    - **Testbericht**
+      - Soll bis Freitag vorliegen
+        - Der weclapp-Export hängt direkt dran
+
+    ## Entscheidungen
+    - Launch am Montag
+
+    ## Aufgaben
+    - [ ] Markus: Testbericht und weclapp-Export schicken (Freitag)
+
+    ## Offene Fragen
+    Keine
+    """
 }
 
 extension DictationController {

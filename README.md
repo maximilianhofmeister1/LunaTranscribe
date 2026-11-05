@@ -277,13 +277,15 @@ Löschen (Papierkorb).
 Im Meeting auf **Zusammenfassen** klicken: LunaTranscribe ruft die lokal installierte **Claude CLI** auf
 (`claude -p`, ohne Werkzeuge, ohne MCP, ohne Projektkontext, ohne gespeicherte Sitzung) und legt Kurzfassung,
 Themen, Entscheidungen, Aufgaben und offene Fragen im Tab „Zusammenfassung“ und als `summary.md` ab. Dauer je nach
-Länge 10–60 s.
+Länge 10–60 s. Die Themen stehen als fette Stichpunkte da, ihre Unterpunkte sind eingerückt – so bleibt auch eine
+lange Zusammenfassung überfliegbar.
 
 - **Voraussetzung**: Claude CLI installiert und angemeldet (`curl -fsSL https://claude.ai/install.sh | bash`, dann
   einmal `claude` starten). Die App sucht sie in `~/.local/bin`, Homebrew und der Login-Shell; ein eigener Pfad und
   ein Modell (z. B. `sonnet`) lassen sich unter Einstellungen → Meetings setzen, „Testen“ prüft Pfad und Version.
 - **Anweisung**: Einstellungen → Meetings → „Anweisung für die Zusammenfassung“, frei editierbar (`{language}` = Sprache
-  des Meetings), „Auf Standard zurücksetzen“ stellt die mitgelieferte Fassung wieder her.
+  des Meetings), „Auf Standard zurücksetzen“ stellt die mitgelieferte Fassung wieder her. Eine eigene Anweisung bleibt bei Updates
+  unverändert.
 - **Local-First bleibt ehrlich**: Die Transkription ist lokal. Für die Zusammenfassung geht der Text des Meetings über
   dein Claude-Konto an Anthropic. Beim ersten Mal erklärt ein Hinweis das; der Button trägt ein Wolken-Symbol.
 
