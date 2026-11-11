@@ -38,8 +38,15 @@ final class AppState: ObservableObject {
     ///   laden ihre Modelle selbst und schalten das ab.
     init(preloadModels: Bool = true) {
         dictation = DictationController(settings: settings, models: models, refiners: refiners)
-        meetingStore = MeetingStore(settings: settings)
-        meetingQueue = MeetingProcessingQueue(settings: settings, models: models, store: meetingStore)
+        if SelfTestSandbox.isActive {
+            // Selbsttests, die Bibliothek und Warteschlange benutzen, bekommen Temp-Ordner (siehe SelfTestSandbox).
+            meetingStore = MeetingStore(settings: settings, unsavedFolder: SelfTestSandbox.unsavedFolder)
+            meetingQueue = MeetingProcessingQueue(settings: settings, models: models, store: meetingStore,
+                                                  folder: SelfTestSandbox.queueFolder, legacyRecordings: nil)
+        } else {
+            meetingStore = MeetingStore(settings: settings)
+            meetingQueue = MeetingProcessingQueue(settings: settings, models: models, store: meetingStore)
+        }
         meeting = MeetingSession(settings: settings, queue: meetingQueue)
         summarizer = MeetingSummarizer(settings: settings, store: meetingStore)
         learner = VocabularyLearner(settings: settings)

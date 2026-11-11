@@ -284,11 +284,19 @@ Themen, Entscheidungen, Aufgaben und offene Fragen im Tab „Zusammenfassung“ 
 Länge 10–60 s. Die Themen stehen als fette Stichpunkte da, ihre Unterpunkte sind eingerückt – so bleibt auch eine
 lange Zusammenfassung überfliegbar.
 
+- **Sprache**: Das Globus-Menü neben „Zusammenfassen“ wählt, in welcher Sprache Claude schreibt – z. B. ein deutsches
+  Meeting mit englischer Zusammenfassung. Vorbelegt ist die Sprache einer vorhandenen Zusammenfassung, sonst der
+  Standard aus Einstellungen → Meetings → „Sprache“ („Wie das Meeting“ oder eine feste Sprache). Die verwendete Sprache
+  steht unter der Zusammenfassung und in `meeting.json`.
+- **Bearbeiten**: Im Tab „Zusammenfassung“ öffnet **Bearbeiten** (⌘E) den Markdown-Text; **Sichern** (⌘S) speichert ihn in
+  `meeting.json` und `summary.md`, **Abbrechen** (Esc) verwirft den Entwurf. Unter der Zusammenfassung steht, wann du
+  sie zuletzt bearbeitet hast. Eine bearbeitete Fassung ersetzt „Neu zusammenfassen“ erst nach einer Rückfrage.
+
 - **Voraussetzung**: Claude CLI installiert und angemeldet (`curl -fsSL https://claude.ai/install.sh | bash`, dann
   einmal `claude` starten). Die App sucht sie in `~/.local/bin`, Homebrew und der Login-Shell; ein eigener Pfad und
   ein Modell (z. B. `sonnet`) lassen sich unter Einstellungen → Meetings setzen, „Testen“ prüft Pfad und Version.
-- **Anweisung**: Einstellungen → Meetings → „Anweisung für die Zusammenfassung“, frei editierbar (`{language}` = Sprache
-  des Meetings), „Auf Standard zurücksetzen“ stellt die mitgelieferte Fassung wieder her. Eine eigene Anweisung bleibt bei Updates
+- **Anweisung**: Einstellungen → Meetings → „Anweisung für die Zusammenfassung“, frei editierbar (`{language}` = gewählte
+  Sprache der Zusammenfassung), „Auf Standard zurücksetzen“ stellt die mitgelieferte Fassung wieder her. Eine eigene Anweisung bleibt bei Updates
   unverändert.
 - **Local-First bleibt ehrlich**: Die Transkription ist lokal. Für die Zusammenfassung geht der Text des Meetings über
   dein Claude-Konto an Anthropic. Beim ersten Mal erklärt ein Hinweis das; der Button trägt ein Wolken-Symbol.
@@ -296,7 +304,7 @@ lange Zusammenfassung überfliegbar.
 Ohne App testen (gleicher Code wie der Button; Achtung, der Text geht an Anthropic):
 
 ```bash
-/Applications/LunaTranscribe.app/Contents/MacOS/LunaTranscribe --summary-selftest "<Meeting-Ordner>/meeting.json" [--model sonnet] [--cli /pfad/zu/claude]
+/Applications/LunaTranscribe.app/Contents/MacOS/LunaTranscribe --summary-selftest "<Meeting-Ordner>/meeting.json" [--model sonnet] [--cli /pfad/zu/claude] [--language en]
 ```
 
 ### Meetings im Terminal mit Claude
@@ -405,7 +413,8 @@ scripts/      build-release.sh, package-release.sh (DMG für GitHub Releases), m
 Vendor/MediaRemoteAdapter/   Framework + Perl-Skript für Now-Playing-Zugriff (macOS ≥ 15.4)
 ```
 
-Design neu rendern, ohne zu klicken (alle Seiten + Popover, hell und dunkel, mit Beispiel-Meeting):
+Design neu rendern, ohne zu klicken (alle Seiten + Popover, hell und dunkel, mit Beispiel-Meeting). Danach spielt der
+Test „Zusammenfassung bearbeiten → Abbrechen/Sichern“ in einem echten Fenster durch und prüft, was gespeichert wurde:
 
 ```bash
 /Applications/LunaTranscribe.app/Contents/MacOS/LunaTranscribe --ui-snapshot /tmp/luna-ui

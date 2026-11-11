@@ -8,8 +8,9 @@ import SwiftUI
 ///
 ///     LunaTranscribe --ui-snapshot /tmp/luna-ui
 ///
-/// Für die Meetings-Seite zeigt der Test ein Beispiel-Meeting aus einem temporären Ordner; der
-/// eingestellte Meeting-Ordner wird danach wiederhergestellt. Modelle werden nicht geladen.
+/// Für die Meetings-Seite zeigt der Test ein Beispiel-Meeting aus einem temporären Ordner, dazu einen wartenden
+/// und einen unterbrochenen Auftrag. Er läuft in der `SelfTestSandbox` (eigene Einstellungen, Temp-Warteschlange),
+/// echte Einstellungen und Ordner bleiben auch bei einem Absturz unberührt. Modelle werden nicht geladen.
 @MainActor
 enum UISnapshotSelfTest {
     static let flag = "--ui-snapshot"
@@ -25,9 +26,11 @@ enum UISnapshotSelfTest {
             do {
                 try await snapshot(state: state, into: output)
                 print("UI-Snapshots: \(output.path)")
+                SelfTestSandbox.cleanUp()
                 exit(0)
             } catch {
                 print("FEHLER: \(error.localizedDescription)")
+                SelfTestSandbox.cleanUp()
                 exit(1)
             }
         }
@@ -36,16 +39,14 @@ enum UISnapshotSelfTest {
     private static func snapshot(state: AppState, into output: URL) async throws {
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
 
-        // Beispiel-Meeting in einem Wegwerf-Ordner, damit Liste und Detail etwas zeigen.
-        let originalFolder = state.settings.meetingFolder
+        // Beispiel-Meeting in einem Wegwerf-Ordner, damit Liste und Detail etwas zeigen. Die Einstellung landet
+        // nur in der Sandbox-Suite, der echte Meeting-Ordner bleibt eingestellt.
         let sampleFolder = FileManager.default.temporaryDirectory.appending(path: "luna-ui-\(UUID().uuidString)")
-        defer {
-            state.settings.meetingFolder = originalFolder
-            try? FileManager.default.removeItem(at: sampleFolder)
-        }
+        defer { try? FileManager.default.removeItem(at: sampleFolder) }
         state.settings.meetingFolder = sampleFolder.path
         state.meetingStore.reload()
-        if let entry = state.meetingStore.add(sampleMeeting()) { state.router.selectedMeetingID = entry.id }
+        let sample = state.meetingStore.add(sampleMeeting())
+        state.router.selectedMeetingID = sample?.id
         state.dictation.injectSampleHistoryForSnapshots()
         // Ein wartender Hintergrund-Auftrag (Modelle sind nicht geladen, er bleibt also „wartend“).
         let queuedID = try enqueueSilentMeeting(state: state)
@@ -69,16 +70,120 @@ enum UISnapshotSelfTest {
             state.router.settingsSection = .general
             try await render(MenuBarView().environmentObject(state), size: NSSize(width: 320, height: 420),
                              appearance: appearance, titled: false, to: output.appending(path: "menubar-\(name).png"))
-            let summarySize = NSSize(width: 760, height: 620)
-            try await render(summarySnapshot(size: summarySize), size: summarySize, appearance: appearance,
-                             titled: false, to: output.appending(path: "summary-\(name).png"))
+            if let sample {
+                let document = MeetingDocument(transcript: try state.meetingStore.load(sample.id), store: state.meetingStore,
+                                               learner: state.learner, summarizer: state.summarizer)
+                let summarySize = NSSize(width: 760, height: 680)
+                for (suffix, draft) in [("", nil), ("-bearbeiten", sampleSummary)] as [(String, String?)] {
+                    try await render(summarySnapshot(document: document, draft: draft, size: summarySize).environmentObject(state),
+                                     size: summarySize, appearance: appearance, titled: false,
+                                     to: output.appending(path: "summary\(suffix)-\(name).png"))
+                }
+            }
+        }
+        if let sample { try await checkSummaryEditing(meetingID: sample.id, state: state) }
+    }
+
+    // MARK: Bearbeiten der Zusammenfassung
+
+    /// Spielt „Bearbeiten → Abbrechen“ und „Bearbeiten → Sichern“ im echten View-Baum durch. Die Knöpfe werden über
+    /// ihre Tastenkürzel ausgelöst (⌘E, Esc, ⌘S – die Aktion läuft so aus dem View heraus wie bei einem Klick),
+    /// getippt wird per `insertText` in den fokussierten Editor; der Entwurf liegt wie in `MeetingDetailView` in
+    /// einem `@State`. (Bedienungshilfen-Klicks gehen nicht: SwiftUI baut den AX-Baum nur für echte AX-Clients.) Hier stürzte 1.2-dev ab: erzwungenes
+    /// Entpacken der Entwurfs-Bindung, während der Editor nach „Abbrechen“ abgebaut wurde.
+    private static func checkSummaryEditing(meetingID: UUID, state: AppState) async throws {
+        let document = MeetingDocument(transcript: try state.meetingStore.load(meetingID), store: state.meetingStore,
+                                       learner: state.learner, summarizer: state.summarizer)
+        guard let original = document.transcript.summary else { throw SelfTestError("Beispiel-Meeting ohne Zusammenfassung") }
+        let size = NSSize(width: 760, height: 680)
+        // Titelleiste, damit das Fenster Key werden und der Editor den Fokus bekommen kann.
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
+        let host = NSHostingView(rootView: SummaryEditingHarness(document: document).environmentObject(state))
+        host.frame = NSRect(origin: .zero, size: size)
+        window.contentView = host
+        window.makeKeyAndOrderFront(nil)
+        defer { window.orderOut(nil) }
+        try await settle(host)
+
+        // Bearbeiten, nichts ändern, Abbrechen – der gemeldete Absturz.
+        try await press(.edit, in: window)
+        try focusEditor(in: window)
+        try await press(.cancel, in: window)
+        guard host.firstSubview(of: NSTextView.self) == nil else { throw SelfTestError("Abbrechen hat den Editor nicht geschlossen") }
+
+        // Bearbeiten, tippen, Abbrechen: nichts wird gespeichert.
+        try await press(.edit, in: window)
+        try type("\n- Verworfen", in: window)
+        try await settle(host)
+        try await press(.cancel, in: window)
+        guard try state.meetingStore.load(meetingID).summary == original else { throw SelfTestError("Abbrechen hat gespeichert") }
+
+        // Bearbeiten, tippen, Sichern: Text und Zeitpunkt landen in meeting.json.
+        let added = "- Im Selbsttest ergänzt"
+        try await press(.edit, in: window)
+        try type("\n" + added, in: window)
+        try await settle(host)
+        try await press(.save, in: window)
+        guard host.firstSubview(of: NSTextView.self) == nil else { throw SelfTestError("Sichern hat den Editor nicht geschlossen") }
+        let saved = try state.meetingStore.load(meetingID).summary
+        guard saved?.markdown.hasSuffix(added) == true, saved?.editedAt != nil else {
+            throw SelfTestError("Sichern hat die Zusammenfassung nicht gespeichert")
+        }
+        print("Zusammenfassung bearbeiten: Abbrechen und Sichern OK")
+    }
+
+    private enum Shortcut {
+        case edit, cancel, save
+    }
+
+    /// Löst einen Knopf über sein Tastenkürzel aus und lässt die Oberfläche nachziehen. ⌘-Kürzel gehen direkt an
+    /// `performKeyEquivalent` des Fensters, weil die Test-App nicht aktiv ist; Esc geht als Taste an den Fokus.
+    private static func press(_ shortcut: Shortcut, in window: NSWindow) async throws {
+        let (characters, keyCode, modifiers): (String, UInt16, NSEvent.ModifierFlags) = switch shortcut {
+        case .edit: ("e", 14, .command)
+        case .cancel: ("\u{1B}", 53, [])
+        case .save: ("s", 1, .command)
+        }
+        guard let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: modifiers,
+                                           timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                           context: nil, characters: characters, charactersIgnoringModifiers: characters,
+                                           isARepeat: false, keyCode: keyCode) else { throw SelfTestError("Tastenereignis") }
+        if modifiers.isEmpty {
+            NSApp.sendEvent(event)
+        } else if !window.performKeyEquivalent(with: event) {
+            throw SelfTestError("Tastenkürzel \(shortcut) hat keinen Knopf ausgelöst")
+        }
+        guard let host = window.contentView else { return }
+        try await settle(host)
+    }
+
+    /// Tippt am Ende des Editors – über `insertText` wie die Tastatur, damit SwiftUI die Änderung selbst meldet.
+    private static func type(_ text: String, in window: NSWindow) throws {
+        try focusEditor(in: window)
+        guard let editor = window.firstResponder as? NSTextView else { throw SelfTestError("Editor hat keinen Fokus") }
+        editor.setSelectedRange(NSRange(location: (editor.string as NSString).length, length: 0))
+        editor.insertText(text, replacementRange: editor.selectedRange())
+    }
+
+    private static func focusEditor(in window: NSWindow) throws {
+        guard let editor = window.contentView?.firstSubview(of: NSTextView.self), window.makeFirstResponder(editor) else {
+            throw SelfTestError("Editor nicht gefunden oder nicht fokussierbar")
         }
     }
 
-    /// Der Tab „Zusammenfassung“ öffnet erst per Klick, deshalb wird sein Inhalt einzeln gerendert.
-    private static func summarySnapshot(size: NSSize) -> some View {
-        MarkdownView(markdown: sampleSummary)
-            .lunaCard(padding: 20)
+    /// Layout und Zeichnen erzwingen, dann kurz warten – so läuft der View-Baum wie nach einem Klick durch.
+    private static func settle(_ host: NSView) async throws {
+        host.layoutSubtreeIfNeeded()
+        host.display()
+        try await Task.sleep(for: .milliseconds(250))
+        host.layoutSubtreeIfNeeded()
+        host.display()
+    }
+
+    /// Der Tab „Zusammenfassung“ öffnet erst per Klick, deshalb wird er einzeln gerendert –
+    /// einmal zum Lesen, einmal im Bearbeiten (`draft`).
+    private static func summarySnapshot(document: MeetingDocument, draft: String?, size: NSSize) -> some View {
+        MeetingSummaryTab(document: document, draft: .constant(draft))
             .padding(LunaMetrics.cardPadding)
             .frame(width: size.width, height: size.height, alignment: .top)
             .background(LunaColor.background)
@@ -144,7 +249,8 @@ enum UISnapshotSelfTest {
         var meeting = MeetingTranscript(title: "Launch-Planung v0.2", date: Date().addingTimeInterval(-3600), durationSeconds: 58,
                                         engine: .parakeet, language: .german, turns: turns,
                                         speakerNames: ["Sprecher 1": "Anna", "Sprecher 2": "Markus"])
-        meeting.summary = MeetingSummary(markdown: sampleSummary, createdAt: Date(), model: "sonnet")
+        meeting.summary = MeetingSummary(markdown: sampleSummary, createdAt: Date().addingTimeInterval(-1800), model: "sonnet",
+                                         language: .german, editedAt: Date())
         return meeting
     }
 
@@ -185,5 +291,33 @@ extension DictationController {
             Transcript(date: Date().addingTimeInterval(-600), text: "Also, wir treffen uns morgen um elf Uhr im Büro.", language: .german,
                        durationSeconds: 4.1, processingSeconds: 1.1, rawText: "ähm also wir treffen uns morgen um elf uhr im büro"),
         ])
+    }
+}
+
+/// Der Tab „Zusammenfassung“ mit dem Entwurf als `@State` – so wie `MeetingDetailView` ihn hält.
+private struct SummaryEditingHarness: View {
+    @ObservedObject var document: MeetingDocument
+    @State private var draft: String?
+
+    var body: some View {
+        ScrollView {
+            MeetingSummaryTab(document: document, draft: $draft)
+                .padding(LunaMetrics.cardPadding)
+        }
+        .background(LunaColor.background)
+    }
+}
+
+private struct SelfTestError: LocalizedError {
+    let errorDescription: String?
+    init(_ message: String) { errorDescription = message }
+}
+
+private extension NSView {
+    func firstSubview<T: NSView>(of type: T.Type) -> T? {
+        for subview in subviews {
+            if let match = subview as? T ?? subview.firstSubview(of: type) { return match }
+        }
+        return nil
     }
 }

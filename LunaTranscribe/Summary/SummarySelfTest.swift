@@ -4,9 +4,10 @@ import LunaCore
 /// Entwickler-Einstieg für die Zusammenfassung über die Claude CLI – über denselben Code wie der
 /// Button in der App (`ClaudeCLI`, `SummaryPrompt`), ohne Modelle und ohne Berechtigungen:
 ///
-///     LunaTranscribe --summary-selftest <Meeting-Ordner/meeting.json> [--cli /pfad/zu/claude] [--model sonnet]
+///     LunaTranscribe --summary-selftest <Meeting-Ordner/meeting.json> [--cli /pfad/zu/claude] [--model sonnet] [--language en]
 ///
-/// Ohne Datei fasst der Test ein kurzes eingebautes Gespräch zusammen. `--cli` mit einem falschen Pfad
+/// Ohne Datei fasst der Test ein kurzes eingebautes Gespräch zusammen. `--language` wählt die Zielsprache
+/// (Sprachcode wie in `AppLanguage`), ohne sie gilt die Sprache des Meetings. `--cli` mit einem falschen Pfad
 /// prüft die Fehlermeldung „CLI nicht gefunden“. Achtung: Der Text geht an Anthropic.
 enum SummarySelfTest {
     static let flag = "--summary-selftest"
@@ -17,16 +18,18 @@ enum SummarySelfTest {
         let file = args.indices.contains(index + 1) && !args[index + 1].hasPrefix("--") ? args[index + 1] : nil
         let cliPath = value(after: "--cli", in: args) ?? ""
         let model = value(after: "--model", in: args)
+        let targetLanguage = value(after: "--language", in: args).flatMap(AppLanguage.init(rawValue:))
 
         Task {
             do {
                 let transcript = try file.map(load) ?? sample
                 guard let cli = ClaudeCLI.locate(customPath: cliPath) else { throw ClaudeCLI.CLIError.notFound }
                 print("CLI: \(cli.executable.path) · \(try await cli.version())")
-                print("Meeting: \(transcript.title), \(transcript.turns.count) Beiträge, \(transcript.wordCount) Wörter\n")
+                let language = targetLanguage ?? transcript.language
+                print("Meeting: \(transcript.title), \(transcript.turns.count) Beiträge, \(transcript.wordCount) Wörter → \(language.displayName)\n")
                 let started = Date()
                 let summary = try await cli.complete(
-                    instructions: SummaryPrompt.instructions(template: SummaryPrompt.defaultTemplate, language: transcript.language),
+                    instructions: SummaryPrompt.instructions(template: SummaryPrompt.defaultTemplate, language: language),
                     input: transcript.render(as: .text), model: model)
                 print(summary)
                 print(String(format: "\n(%.1f s)", Date().timeIntervalSince(started)))

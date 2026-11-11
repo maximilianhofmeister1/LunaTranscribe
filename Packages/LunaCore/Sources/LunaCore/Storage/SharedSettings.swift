@@ -17,6 +17,7 @@ public struct SharedSettings: Equatable, Sendable {
         public static let vocabularyEnabled = "vocabularyEnabled"
         public static let vocabularyEntries = "vocabularyEntries"
         public static let summaryPrompt = "summaryPrompt"
+        public static let summaryLanguage = "summaryLanguage"
         public static let mcpAccessEnabled = "mcpAccessEnabled"
         public static let mcpWriteEnabled = "mcpWriteEnabled"
         public static let mcpConfirmRenames = "mcpConfirmRenames"
@@ -29,6 +30,8 @@ public struct SharedSettings: Equatable, Sendable {
     public var vocabularyEntries: [VocabularyEntry]
     /// Anweisung für Zusammenfassungen (die App speichert nur Abweichungen vom Standard).
     public var summaryPromptTemplate: String
+    /// Standardsprache der Zusammenfassungen. Standard: wie das Meeting.
+    public var summaryLanguage: SummaryLanguage
     /// Hauptschalter: Claude darf Meetings über luna-mcp lesen. Standard aus.
     public var mcpAccessEnabled: Bool
     /// Claude darf Meetings umbenennen, Sprecher benennen und (nach Bestätigung) löschen. Standard aus.
@@ -39,12 +42,14 @@ public struct SharedSettings: Equatable, Sendable {
     public var semanticSearchEnabled: Bool
 
     public init(meetingFolderPath: String = "", vocabularyEnabled: Bool = true, vocabularyEntries: [VocabularyEntry] = [],
-                summaryPromptTemplate: String = SummaryPrompt.defaultTemplate, mcpAccessEnabled: Bool = false,
+                summaryPromptTemplate: String = SummaryPrompt.defaultTemplate, summaryLanguage: SummaryLanguage = .meeting,
+                mcpAccessEnabled: Bool = false,
                 mcpWriteEnabled: Bool = false, mcpConfirmRenames: Bool = false, semanticSearchEnabled: Bool = false) {
         self.meetingFolderPath = meetingFolderPath
         self.vocabularyEnabled = vocabularyEnabled
         self.vocabularyEntries = vocabularyEntries
         self.summaryPromptTemplate = summaryPromptTemplate
+        self.summaryLanguage = summaryLanguage
         self.mcpAccessEnabled = mcpAccessEnabled
         self.mcpWriteEnabled = mcpWriteEnabled
         self.mcpConfirmRenames = mcpConfirmRenames
@@ -64,6 +69,7 @@ public struct SharedSettings: Equatable, Sendable {
             vocabularyEnabled: bool(Key.vocabularyEnabled, true),
             vocabularyEntries: entries,
             summaryPromptTemplate: defaults.string(forKey: Key.summaryPrompt) ?? SummaryPrompt.defaultTemplate,
+            summaryLanguage: defaults.string(forKey: Key.summaryLanguage).flatMap(SummaryLanguage.init(rawValue:)) ?? .meeting,
             mcpAccessEnabled: bool(Key.mcpAccessEnabled, false),
             mcpWriteEnabled: bool(Key.mcpWriteEnabled, false),
             mcpConfirmRenames: bool(Key.mcpConfirmRenames, false),

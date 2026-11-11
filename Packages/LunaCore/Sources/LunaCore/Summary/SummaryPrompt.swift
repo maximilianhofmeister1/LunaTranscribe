@@ -31,10 +31,12 @@ public enum SummaryPrompt {
     Was blieb ungeklärt? Schreibe „Keine“, wenn alles geklärt ist.
 
     Regeln: Erfinde nichts, was nicht im Transkript steht. Nenne Personen so, wie sie im Transkript heißen. \
-    Antworte nur mit der Zusammenfassung, ohne Einleitung oder Schlusssatz.
+    Schreibe alles auf {language}, auch die Abschnittsüberschriften – selbst wenn das Meeting in einer \
+    anderen Sprache geführt wurde. Antworte nur mit der Zusammenfassung, ohne Einleitung oder Schlusssatz.
     """
 
-    /// Fertige Anweisung für ein Meeting; ein leerer Text fällt auf den Standard zurück.
+    /// Fertige Anweisung; `language` ist die Zielsprache der Zusammenfassung (siehe `SummaryLanguage`).
+    /// Ein leerer Text fällt auf den Standard zurück.
     public static func instructions(template: String, language: AppLanguage) -> String {
         let trimmed = template.trimmingCharacters(in: .whitespacesAndNewlines)
         let base = trimmed.isEmpty ? defaultTemplate : template

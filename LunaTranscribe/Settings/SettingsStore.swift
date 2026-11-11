@@ -55,6 +55,9 @@ final class SettingsStore: ObservableObject {
     @Published var summaryPrompt: String {
         didSet { saveUnlessDefault(summaryPrompt, default: SummaryPrompt.defaultTemplate, .summaryPrompt) }
     }
+    /// Standardsprache der Zusammenfassung; im Meeting für die nächste Zusammenfassung änderbar.
+    /// Auch in `SharedSettings` (luna-mcp, Prompt `meeting_summary`).
+    @Published var summaryLanguage: SummaryLanguage { didSet { save(summaryLanguage, .summaryLanguage) } }
     /// Der einmalige Hinweis „Text geht an Anthropic“ wurde bestätigt.
     @Published var summaryCloudNoticeAccepted: Bool { didSet { save(summaryCloudNoticeAccepted, .summaryCloudNoticeAccepted) } }
 
@@ -135,6 +138,7 @@ final class SettingsStore: ObservableObject {
         claudeCLIPath = Self.load(.claudeCLIPath, default: "")
         claudeModel = Self.load(.claudeModel, default: "")
         summaryPrompt = Self.load(.summaryPrompt, default: SummaryPrompt.defaultTemplate)
+        summaryLanguage = Self.load(.summaryLanguage, default: .meeting)
         summaryCloudNoticeAccepted = Self.load(.summaryCloudNoticeAccepted, default: false)
         refinerKind = Self.load(.refinerKind, default: .lfm2_1_2b)
         refinePrompt = Self.load(.refinePrompt, default: RefinePrompt.defaultTemplate)
@@ -165,13 +169,16 @@ final class SettingsStore: ObservableObject {
         /// Historischer Name aus der Zeit, als der Ordner nur Backups/Exporte enthielt.
         case meetingFolder = "meetingExportFolder"
         case claudeCLIPath, claudeModel, summaryPrompt, summaryCloudNoticeAccepted
+        /// Auch in `SharedSettings.Key` (luna-mcp) – dort gleich halten.
+        case summaryLanguage
         case refinerKind, refinePrompt
         case vocabularyEnabled, vocabularyEntries, vocabularySuggestions, ignoredSuggestionKeys
         /// Auch in `SharedSettings.Key` (luna-mcp) – dort gleich halten.
         case mcpAccessEnabled, mcpWriteEnabled, mcpConfirmRenames, mcpCloudNoticeAccepted, semanticSearchEnabled
     }
 
-    private static var defaults: UserDefaults { .standard }
+    /// Selbsttests, die Einstellungen ändern, schreiben in eine eigene Suite (`SelfTestSandbox`).
+    private static let defaults: UserDefaults = SelfTestSandbox.isActive ? SelfTestSandbox.defaults : .standard
 
     private static func load<T>(_ key: Key, default value: T) -> T {
         defaults.object(forKey: key.rawValue) as? T ?? value

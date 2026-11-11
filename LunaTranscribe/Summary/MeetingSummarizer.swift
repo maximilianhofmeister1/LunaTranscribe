@@ -26,7 +26,9 @@ final class MeetingSummarizer: ObservableObject {
 
     func isRunning(_ id: UUID) -> Bool { running.contains(id) }
 
-    func summarize(_ transcript: MeetingTranscript) {
+    /// Fasst `transcript` in `language` zusammen (Wahl im Meeting, vorbelegt aus `SettingsStore.summaryLanguage`).
+    /// Ersetzt eine vorhandene – auch bearbeitete – Zusammenfassung; das Nachfragen ist Sache der Oberfläche.
+    func summarize(_ transcript: MeetingTranscript, language: AppLanguage) {
         let id = transcript.id
         guard !running.contains(id) else { return }
         errors[id] = nil
@@ -40,17 +42,18 @@ final class MeetingSummarizer: ObservableObject {
             errors[id] = ClaudeCLI.CLIError.notFound.localizedDescription
             return
         }
-        let instructions = SummaryPrompt.instructions(template: settings.summaryPrompt, language: transcript.language)
+        let instructions = SummaryPrompt.instructions(template: settings.summaryPrompt, language: language)
         let input = transcript.render(as: .text)
         let model = settings.claudeModel.trimmingCharacters(in: .whitespaces)
 
         running.insert(id)
-        Log.summary.notice("summary started: \(transcript.wordCount) words via \(cli.executable.path, privacy: .public)")
+        Log.summary.notice("summary started: \(transcript.wordCount) words in \(language.rawValue, privacy: .public) via \(cli.executable.path, privacy: .public)")
         tasks[id] = Task { [weak self] in
             let started = Date()
             do {
                 let markdown = try await cli.complete(instructions: instructions, input: input, model: model.isEmpty ? nil : model)
-                let summary = MeetingSummary(markdown: markdown, createdAt: Date(), model: model.isEmpty ? nil : model)
+                let summary = MeetingSummary(markdown: markdown, createdAt: Date(), model: model.isEmpty ? nil : model,
+                                             language: language)
                 self?.finish(id, with: summary)
                 Log.summary.notice("summary done in \(Date().timeIntervalSince(started), format: .fixed(precision: 1)) s")
             } catch is CancellationError {

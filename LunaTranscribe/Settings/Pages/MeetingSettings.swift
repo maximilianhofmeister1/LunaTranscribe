@@ -71,11 +71,22 @@ struct MeetingSettings: View {
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 220)
             }
+            SettingRow(label: "Sprache", hint: "Standard für neue Zusammenfassungen; im Meeting für die nächste Zusammenfassung änderbar.") {
+                Picker("", selection: $settings.summaryLanguage) {
+                    Text("Wie das Meeting").tag(SummaryLanguage.meeting)
+                    Divider()
+                    ForEach(AppLanguage.sortedByDisplayName) { language in
+                        Text(language.displayName).tag(SummaryLanguage.fixed(language))
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 220)
+            }
             VStack(alignment: .leading, spacing: 6) {
                 Text("Anweisung für die Zusammenfassung").font(LunaFont.text(13.5))
                 PromptEditor(text: $settings.summaryPrompt, isDefault: settings.isSummaryPromptDefault,
                              onReset: settings.resetSummaryPrompt)
-                Hint("„{language}“ wird durch die Sprache des Meetings ersetzt. Das Transkript hängt die App mit Zeitstempeln und Sprechernamen an.")
+                Hint("„{language}“ wird durch die gewählte Sprache der Zusammenfassung ersetzt. Das Transkript hängt die App mit Zeitstempeln und Sprechernamen an.")
             }
         }
     }
@@ -157,3 +168,4 @@ struct MeetingSettings: View {
         }
     }
 }
+

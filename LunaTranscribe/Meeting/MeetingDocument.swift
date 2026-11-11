@@ -55,6 +55,18 @@ final class MeetingDocument: ObservableObject {
         learnedSuggestions = learner.learn(before: old, after: cleaned)
     }
 
+    /// Übernimmt den vom Nutzer bearbeiteten Text der Zusammenfassung und speichert sofort – das Bearbeiten
+    /// ist ein bewusster Schritt mit „Sichern“, keine laufende Eingabe. Leerer Text wird ignoriert
+    /// (Löschen ist keine Bearbeitung); unveränderter Text markiert nichts als bearbeitet.
+    func reviseSummary(to markdown: String) {
+        guard let summary = transcript.summary,
+              !markdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let revised = summary.revised(markdown: markdown)
+        guard revised != summary else { return }
+        transcript.summary = revised
+        flush()
+    }
+
     /// Sofort speichern (z. B. beim Schließen oder Wechseln).
     func flush() {
         guard saveTask != nil else { return }
