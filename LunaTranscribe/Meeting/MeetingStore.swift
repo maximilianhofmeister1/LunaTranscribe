@@ -54,8 +54,12 @@ final class MeetingStore: ObservableObject {
 
     var libraryFolder: URL { settings.meetingFolderURL }
 
-    init(settings: SettingsStore) {
+    /// Rettungsordner für Meetings, die nicht in die Bibliothek geschrieben werden konnten.
+    let unsavedFolder: URL
+
+    init(settings: SettingsStore, unsavedFolder: URL = AppPaths.unsavedMeetings) {
         self.settings = settings
+        self.unsavedFolder = unsavedFolder
         reload()
         settings.$meetingFolder
             .dropFirst()
@@ -80,7 +84,7 @@ final class MeetingStore: ObservableObject {
             Log.meeting.error("library folder unavailable: \(error.localizedDescription, privacy: .public)")
         }
         let library = folderIssue == nil ? readEntries(in: libraryFolder, unsaved: false) : []
-        let unsaved = readEntries(in: AppPaths.unsavedMeetings, unsaved: true)
+        let unsaved = readEntries(in: unsavedFolder, unsaved: true)
         entries = (library + unsaved).sorted { $0.date > $1.date }
         searchIndex = searchIndex.filter { id, _ in entries.contains { $0.id == id } }
     }
@@ -106,7 +110,7 @@ final class MeetingStore: ObservableObject {
     /// Legt ein neu verarbeitetes Meeting an. `audioURL` wird in den Meeting-Ordner verschoben.
     @discardableResult
     func add(_ transcript: MeetingTranscript, audioURL: URL? = nil) -> Entry? {
-        let target = folderIssue == nil ? libraryFolder : AppPaths.unsavedMeetings
+        let target = folderIssue == nil ? libraryFolder : unsavedFolder
         do {
             let folder = try MeetingLibrary.write(transcript, into: target, existing: nil)
             if let audioURL {
@@ -115,8 +119,8 @@ final class MeetingStore: ObservableObject {
         } catch {
             // Letzte Rettung: Rettungsordner. Scheitert auch das, bleibt nur der Fehler im Log.
             Log.meeting.error("saving meeting failed: \(error.localizedDescription, privacy: .public)")
-            if target != AppPaths.unsavedMeetings {
-                _ = try? MeetingLibrary.write(transcript, into: AppPaths.unsavedMeetings, existing: nil)
+            if target != unsavedFolder {
+                _ = try? MeetingLibrary.write(transcript, into: unsavedFolder, existing: nil)
             }
         }
         reload()
@@ -231,7 +235,7 @@ final class MeetingStore: ObservableObject {
     }
 
     private func moveUnsavedIntoLibrary() {
-        for folder in MeetingLibrary.meetingFolders(in: AppPaths.unsavedMeetings) {
+        for folder in MeetingLibrary.meetingFolders(in: unsavedFolder) {
             do {
                 try FileManager.default.moveItem(at: folder, to: MeetingLibrary.uniqueURL(in: libraryFolder, name: folder.lastPathComponent))
                 Log.meeting.notice("rescued meeting moved into library: \(folder.lastPathComponent, privacy: .public)")

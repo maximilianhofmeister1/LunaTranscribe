@@ -69,6 +69,8 @@ enum LunaFont {
     static func text(_ size: CGFloat = 13, weight: Font.Weight = .regular) -> Font { figtree(size, weight: weight) }
     /// Nebentexte, Hinweise.
     static func caption(_ size: CGFloat = 11.5, weight: Font.Weight = .regular) -> Font { figtree(size, weight: weight) }
+    /// Quelltext in Editoren (Prompts, Markdown) – feste Breite, damit Einrückungen sichtbar bleiben.
+    static func mono(_ size: CGFloat = 12) -> Font { .system(size: size, design: .monospaced) }
 
     /// Registriert die mitgelieferten Schriften für diesen Prozess. Einmal beim Start aufrufen.
     static func registerBundledFonts() {

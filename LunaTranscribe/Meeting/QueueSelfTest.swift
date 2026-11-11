@@ -7,10 +7,10 @@ import Foundation
 ///     say -v Anna -o /tmp/a.wav --data-format=LEF32@16000 "…"
 ///     LunaTranscribe --queue-selftest /tmp/a.wav [weitere.wav …]
 ///
-/// Kopiert jede Datei als beendetes Meeting in die echte Warteschlange (so, als hätte man mehrere
-/// Meetings direkt hintereinander beendet), wartet, bis alle verarbeitet sind, und druckt Reihenfolge,
-/// Zeiten und Ergebnis. Gespeichert wird in einen temporären Meeting-Ordner; der eingestellte Ordner
-/// wird danach wiederhergestellt. Nutzt die in den Einstellungen gewählte Engine.
+/// Kopiert jede Datei als beendetes Meeting in die Warteschlange (so, als hätte man mehrere Meetings direkt
+/// hintereinander beendet), wartet, bis alle verarbeitet sind, und druckt Reihenfolge, Zeiten und Ergebnis.
+/// Läuft in der `SelfTestSandbox`: Warteschlange und Einstellungen sind Kopien, gespeichert wird in einen
+/// temporären Meeting-Ordner. Nutzt die in den Einstellungen gewählte Engine.
 @MainActor
 enum QueueSelfTest {
     static let flag = "--queue-selftest"
@@ -29,6 +29,7 @@ enum QueueSelfTest {
         Task { @MainActor in
             // Aufräumen (Meeting-Ordner zurücksetzen) muss vor `exit` passieren – `exit` überspringt `defer`.
             let succeeded = await runIsolated(state: state, files: files)
+            SelfTestSandbox.cleanUp()
             exit(succeeded ? 0 : 1)
         }
     }

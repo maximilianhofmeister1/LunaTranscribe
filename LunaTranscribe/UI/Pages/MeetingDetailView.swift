@@ -1,8 +1,8 @@
 import LunaCore
 import SwiftUI
 
-/// Ein Meeting: Titel, Aktionen (Zusammenfassen, Export, Finder, Löschen) und zwei Tabs –
-/// Transkript (Sprecher benennen, Beiträge korrigieren) und Zusammenfassung.
+/// Ein Meeting: Titel, Aktionen (Zusammenfassen in wählbarer Sprache, Export, Finder, Löschen) und zwei
+/// Tabs – Transkript (Sprecher benennen, Beiträge korrigieren) und Zusammenfassung (lesen, bearbeiten).
 struct MeetingDetailView: View {
     @EnvironmentObject var state: AppState
     @ObservedObject var document: MeetingDocument
@@ -15,11 +15,27 @@ struct MeetingDetailView: View {
 
     @State private var tab: Tab = .transcript
     @State private var showCloudNotice = false
+    @State private var confirmReplaceEdited = false
     @State private var confirmDelete = false
     @State private var actionMessage: String?
+    /// Im Menü gewählte Sprache für die nächste Zusammenfassung; nil = Vorbelegung (`defaultSummaryLanguage`).
+    @State private var chosenSummaryLanguage: AppLanguage?
+    /// Entwurf der Zusammenfassung während des Bearbeitens; nil = nicht im Bearbeiten.
+    @State private var summaryDraft: String?
 
     private var transcript: MeetingTranscript { document.transcript }
     private var isSummarizing: Bool { state.summarizer.isRunning(transcript.id) }
+    private var isEditingSummary: Bool { summaryDraft != nil }
+
+    /// Sprache einer vorhandenen Zusammenfassung, sonst der Standard aus den Einstellungen.
+    private var defaultSummaryLanguage: AppLanguage {
+        transcript.summary?.language ?? state.settings.summaryLanguage.resolved(for: transcript.language)
+    }
+
+    private var summaryLanguage: Binding<AppLanguage> {
+        Binding(get: { chosenSummaryLanguage ?? defaultSummaryLanguage },
+                set: { chosenSummaryLanguage = $0 })
+    }
 
     var body: some View {
         ScrollView {
@@ -44,6 +60,12 @@ struct MeetingDetailView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(LunaColor.background)
+        .confirmationDialog("Bearbeitete Zusammenfassung ersetzen?", isPresented: $confirmReplaceEdited) {
+            Button("Neu zusammenfassen") { confirmCloudNoticeThenSummarize() }
+            Button("Abbrechen", role: .cancel) {}
+        } message: {
+            Text("Du hast diese Zusammenfassung bearbeitet. Eine neue Zusammenfassung von Claude ersetzt deine Änderungen.")
+        }
         .alert("Zusammenfassung mit Claude", isPresented: $showCloudNotice) {
             Button("Verstanden, zusammenfassen") {
                 state.settings.summaryCloudNoticeAccepted = true
@@ -103,10 +125,11 @@ struct MeetingDetailView: View {
                     Label(transcript.summary == nil ? "Zusammenfassen" : "Neu zusammenfassen", systemImage: "sparkles")
                 }
                 .buttonStyle(.lunaPrimary)
-                .disabled(transcript.confidential)
-                .help(transcript.confidential
-                      ? "Vertrauliche Meetings werden nicht an Claude geschickt."
-                      : "Fasst das Meeting über die Claude CLI zusammen (Text geht an Anthropic)")
+                .fixedSize()
+                .disabled(transcript.confidential || isEditingSummary)
+                .help(summaryButtonHelp)
+                SummaryLanguageMenu(selection: summaryLanguage, meetingLanguage: transcript.language)
+                    .disabled(transcript.confidential)
             }
 
             Menu {
@@ -186,53 +209,31 @@ struct MeetingDetailView: View {
 
     // MARK: Zusammenfassung
 
-    @ViewBuilder
     private var summaryTab: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if let error = state.summarizer.errors[transcript.id] {
-                Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .font(LunaFont.caption(12))
-                    .foregroundStyle(LunaColor.rose)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .lunaCard()
-            }
-            if isSummarizing {
-                HStack(spacing: 10) {
-                    ProgressView().controlSize(.small)
-                    Text("Claude fasst das Meeting zusammen … das dauert je nach Länge 10–60 Sekunden.")
-                        .font(LunaFont.text(13)).foregroundStyle(LunaColor.inkMuted)
-                }
-                .lunaCard()
-            }
-            if let summary = transcript.summary {
-                VStack(alignment: .leading, spacing: 10) {
-                    MarkdownView(markdown: summary.markdown)
-                    Divider()
-                    Text("Erstellt \(summary.createdAt.lunaDateTime) mit Claude\(summary.model.map { " (\($0))" } ?? "")")
-                        .font(LunaFont.caption(11)).foregroundStyle(LunaColor.inkMuted)
-                }
-                .lunaCard(padding: 20)
-            } else if !isSummarizing {
-                VStack(alignment: .leading, spacing: 10) {
-                    SectionTitle(title: "Noch keine Zusammenfassung", systemImage: "sparkles")
-                    Hint("„Zusammenfassen“ schickt das Transkript über die Claude CLI an Claude und legt Kurzfassung, Themen, Entscheidungen, Aufgaben und offene Fragen hier ab. Die Anweisung passt du unter Einstellungen → Meetings an.")
-                    Button("Anweisung anpassen…") { state.openSettings(.meetings) }.buttonStyle(.lunaQuiet)
-                }
-                .lunaCard()
-            }
-        }
+        MeetingSummaryTab(document: document, draft: $summaryDraft)
+    }
+
+    private var summaryButtonHelp: String {
+        if transcript.confidential { return "Vertrauliche Meetings werden nicht an Claude geschickt." }
+        if isEditingSummary { return "Erst die Bearbeitung der Zusammenfassung sichern oder abbrechen." }
+        return "Fasst das Meeting über die Claude CLI zusammen (Text geht an Anthropic)"
     }
 
     // MARK: Aktionen
 
+    /// Reihenfolge der Rückfragen: erst „bearbeitete Fassung ersetzen?“, dann der einmalige Cloud-Hinweis.
     private func requestSummary() {
         tab = .summary
+        if transcript.summary?.isEdited == true { confirmReplaceEdited = true } else { confirmCloudNoticeThenSummarize() }
+    }
+
+    private func confirmCloudNoticeThenSummarize() {
         if state.settings.summaryCloudNoticeAccepted { startSummary() } else { showCloudNotice = true }
     }
 
     private func startSummary() {
         document.flush()   // aktuelle Namen/Korrekturen mitschicken
-        state.summarizer.summarize(document.transcript)
+        state.summarizer.summarize(document.transcript, language: summaryLanguage.wrappedValue)
     }
 
     private func export(_ format: MeetingTranscript.ExportFormat, includeSummary: Bool) {
