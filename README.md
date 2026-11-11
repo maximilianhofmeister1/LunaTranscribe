@@ -17,7 +17,7 @@ Alles lebt in der Menüleiste; ein **Hauptfenster** (Übersicht, Meetings, Wört
 
 **Auch für Windows:** Die Windows-Version (Windows 10/11, x64) liegt im Ordner [`windows/`](windows/README.md) –
 gleiche Funktionen, gleiches Design, dasselbe Meeting-Format (ein Meeting-Ordner kann zwischen Mac und PC geteilt
-werden). Download als ZIP unter [Releases](https://github.com/maximilianhofmeister1/LunaTranscribe/releases).
+werden). Download als Installer (oder ZIP) unter [Releases](https://github.com/maximilianhofmeister1/LunaTranscribe/releases).
 
 **Open Source (MIT), kostenlos.** Einen ausführlichen Vergleich mit Wispr Flow und die Local-First-Architektur beschreibt
 [docs/Vergleich-LunaTranscribe-vs-WisprFlow.md](docs/Vergleich-LunaTranscribe-vs-WisprFlow.md).

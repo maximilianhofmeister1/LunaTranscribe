@@ -20,13 +20,18 @@ zwischen Mac und PC geteilt werden (z. B. über einen Cloud-Ordner).
 
 ## Installation
 
-1. Unter [Releases](https://github.com/maximilianhofmeister1/LunaTranscribe/releases) die Datei
-   `LunaTranscribe-<Version>-windows-x64.zip` laden (optional mit der `.sha256` daneben prüfen:
-   `Get-FileHash -Algorithm SHA256 <zip>`).
-2. Entpacken, den Ordner `LunaTranscribe` z. B. nach `%LOCALAPPDATA%\Programs\` verschieben und `LunaTranscribe.exe`
-   starten – die App erscheint im Infobereich der Taskleiste.
-3. Die EXE ist nicht signiert: Windows SmartScreen warnt beim ersten Start → „Weitere Informationen“ →
-   „Trotzdem ausführen“.
+1. Unter [Releases](https://github.com/maximilianhofmeister1/LunaTranscribe/releases) den Installer
+   `LunaTranscribe-<Version>-windows-x64-setup.exe` laden (optional mit der `.sha256` daneben prüfen:
+   `Get-FileHash -Algorithm SHA256 <datei>`).
+2. Starten. Der Installer ist nicht signiert: Windows SmartScreen warnt → „Weitere Informationen“ → „Trotzdem ausführen“.
+3. Er installiert ohne Administratorrechte nach `%LOCALAPPDATA%\Programs\LunaTranscribe`, legt einen Startmenü-Eintrag
+   an, auf Wunsch eine Desktop-Verknüpfung und den Autostart, und startet die App – sie erscheint im Infobereich der
+   Taskleiste. Deinstallieren über Einstellungen → Apps; Einstellungen, Modelle und Meetings bleiben dabei erhalten.
+4. **Update:** einfach den neuen Installer ausführen – er beendet die laufende App und ersetzt sie.
+
+**Ohne Installer:** `LunaTranscribe-<Version>-windows-x64.zip` entpacken, den Ordner `LunaTranscribe` z. B. nach
+`%LOCALAPPDATA%\Programs\` verschieben und `LunaTranscribe.exe` starten (kein Startmenü-Eintrag, keine Deinstallation –
+Ordner löschen genügt).
 
 ## Voraussetzungen
 
@@ -53,9 +58,10 @@ zwischen Mac und PC geteilt werden (z. B. über einen Cloud-Ordner).
 Baut Release (self-contained, ≈ 300 MB inkl. `mcp\`), installiert nach `%LOCALAPPDATA%\Programs\LunaTranscribe`, legt
 eine Startmenü-Verknüpfung an und startet die App. Kein Administrator nötig.
 
-**ZIP für GitHub Releases:** `.\scripts\package-release.ps1` baut Release und legt
+**Installer und ZIP für GitHub Releases:** `.\scripts\package-release.ps1` baut Release und legt
+`dist\LunaTranscribe-<Version>-windows-x64-setup.exe` (Inno Setup, `installer\LunaTranscribe.iss`) und
 `dist\LunaTranscribe-<Version>-windows-x64.zip` samt SHA-256 im Wurzelordner des Repos ab – neben der DMG der
-macOS-Version, damit beide im selben GitHub-Release landen. Die Version steht in `LunaTranscribe\LunaTranscribe.csproj`
+macOS-Version, damit alles im selben GitHub-Release landet. Braucht Inno Setup 6: `winget install JRSoftware.InnoSetup`. Die Version steht in `LunaTranscribe\LunaTranscribe.csproj`
 (`<Version>`) und folgt der macOS-Version.
 
 **Autostart:** Einstellungen → Allgemein → „Beim Anmelden automatisch starten“ (Eintrag unter `HKCU\…\Run`;
