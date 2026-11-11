@@ -8,16 +8,17 @@ struct LunaTranscribeApp: App {
     init() {
         // Bundle-ID-Wechsel in 1.1.0 (com.maximhofmeister.LunaTranscribe → at.aljoma.lunatranscribe): alte Einstellungen übernehmen, bevor irgendwer sie liest.
         SharedSettings.migrateLegacyDomain(into: .standard)
-        // Entwickler-Selbsttests (Meeting/Refine/Vocabulary/Learn/Summary/UI/Queue); beenden den Prozess selbst.
+        // Entwickler-Selbsttests (Meeting/Refine/Vocabulary/Learn/Summary/UI/Queue/Recovery); beenden den Prozess selbst.
         // Läuft einer, lädt AppState keine Modelle vor – sonst konkurrieren zwei Downloads um dieselbe Datei.
         let selfTestRunning = LearnSelfTest.runIfRequested() || MeetingSelfTest.runIfRequested()
             || RefineSelfTest.runIfRequested() || VocabularySelfTest.runIfRequested() || SummarySelfTest.runIfRequested()
-            || UISnapshotSelfTest.isRequested || QueueSelfTest.isRequested
+            || UISnapshotSelfTest.isRequested || QueueSelfTest.isRequested || RecoverySelfTest.isRequested
         LunaFont.registerBundledFonts()
         let state = AppState(preloadModels: !selfTestRunning)
         _state = StateObject(wrappedValue: state)
         UISnapshotSelfTest.run(state: state)
         QueueSelfTest.run(state: state)
+        RecoverySelfTest.run(state: state)
     }
 
     var body: some Scene {

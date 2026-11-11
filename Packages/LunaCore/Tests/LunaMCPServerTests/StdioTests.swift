@@ -1,7 +1,12 @@
 import Foundation
 import LunaCore
 import MCP
+// Wie das MCP-SDK: auf Apple-Plattformen `System` (seit dem macOS-27-SDK nicht mehr mit SystemPackage austauschbar).
+#if canImport(System)
+import System
+#else
 import SystemPackage
+#endif
 import Testing
 @testable import LunaMCPServer
 

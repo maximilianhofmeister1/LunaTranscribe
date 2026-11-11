@@ -8,6 +8,7 @@ enum RefinerKind: String, CaseIterable, Identifiable {
     case qwen3_1_7b         // Bessere Qualität, etwas langsamer (~1 s)
     case qwen3_4b           // Beste Qualität (Selbstkorrekturen), ~2–3 s
     case appleIntelligence  // Apples System-Modell (macOS 26+), kein Download, Neural Engine
+    case claudeHaiku        // Claude Haiku über die lokale Claude CLI – Cloud, Text verlässt den Mac
 
     var id: String { rawValue }
 
@@ -17,6 +18,7 @@ enum RefinerKind: String, CaseIterable, Identifiable {
         case .qwen3_1_7b: return "Qwen3 1.7B (genauer – ~1 s pro Diktat, ~1 GB Download, ~1,3 GB RAM)"
         case .qwen3_4b: return "Qwen3 4B (beste Qualität – ~2–3 s pro Diktat, ~2,3 GB Download, ~2,8 GB RAM)"
         case .appleIntelligence: return "Apple Intelligence (Systemmodell, kein Download, macOS 26+)"
+        case .claudeHaiku: return "Claude Haiku 5.5 (Cloud über die Claude CLI – ~3–5 s pro Diktat, kein Download, kein RAM)"
         }
     }
 
@@ -26,16 +28,17 @@ enum RefinerKind: String, CaseIterable, Identifiable {
         case .qwen3_1_7b: return "Qwen3 1.7B"
         case .qwen3_4b: return "Qwen3 4B"
         case .appleIntelligence: return "Apple Intelligence"
+        case .claudeHaiku: return "Claude Haiku"
         }
     }
 
-    /// Hugging-Face-Repo für MLX-Modelle; nil für das Systemmodell.
+    /// Hugging-Face-Repo für MLX-Modelle; nil für Systemmodell und Claude.
     var huggingFaceID: String? {
         switch self {
         case .lfm2_1_2b: return "mlx-community/LFM2-1.2B-4bit"
         case .qwen3_1_7b: return "mlx-community/Qwen3-1.7B-4bit"
         case .qwen3_4b: return "mlx-community/Qwen3-4B-4bit"
-        case .appleIntelligence: return nil
+        case .appleIntelligence, .claudeHaiku: return nil
         }
     }
 
@@ -45,7 +48,8 @@ enum RefinerKind: String, CaseIterable, Identifiable {
     }
 
     /// Kann das Modell auf diesem Mac grundsätzlich genutzt werden? MLX-Modelle immer (Download
-    /// passiert beim Laden); Apple Intelligence nur, wenn das System es freigibt.
+    /// passiert beim Laden); Apple Intelligence nur, wenn das System es freigibt. Claude gilt als
+    /// verfügbar – ob die CLI installiert ist, prüft erst das Laden (Suche kann die Login-Shell fragen).
     var availability: Availability {
         guard self == .appleIntelligence else { return .available }
         guard #available(macOS 26, *) else {
@@ -76,13 +80,13 @@ enum RefinerKind: String, CaseIterable, Identifiable {
     }
 }
 
-/// Gemeinsame Schnittstelle der Nachbearbeitungs-Backends (MLX-Modelle, Apple Intelligence).
+/// Gemeinsame Schnittstelle der Nachbearbeitungs-Backends (MLX-Modelle, Apple Intelligence, Claude CLI).
 /// Zustandslos pro Aufruf: jedes Diktat wird unabhängig vom vorherigen bereinigt.
 protocol TextRefiner: AnyObject {
     var kind: RefinerKind { get }
     var isLoaded: Bool { get }
 
-    /// Lädt das Modell (MLX: beim ersten Mal Download von Hugging Face) und wärmt es auf.
+    /// Lädt das Modell (MLX: beim ersten Mal Download von Hugging Face) und wärmt es auf; Claude: findet die CLI.
     /// `progress` liegt zwischen 0 und 1.
     func prepare(progress: @escaping @Sendable (Double) -> Void) async throws
 

@@ -57,7 +57,7 @@ andere gibt es reproduzierbare Entwickler-Selbsttests, die ohne UI laufen und si
 | `--refine-selftest "<text>"` | Nachbearbeitung (Prompt, Modell, Zeiten) | keine |
 | `--summary-selftest [meeting.json]` | Zusammenfassung über die Claude CLI (sendet Text an Anthropic) | keine |
 | `--queue-selftest <wav…>` | Hintergrund-Verarbeitung mehrerer Meetings | keine |
-| `--ui-snapshot <ordner>` | Rendert alle Seiten hell/dunkel als PNG | keine |
+| `--ui-snapshot <ordner>` | Rendert alle Seiten und die Zusammenfassung hell/dunkel als PNG | keine |
 | `--meeting-selftest <sek> --log <datei>` | Aufnahme Mikrofon + Systemaudio → Transkript | über `open -n … --args` starten |
 | `luna-mcp --selftest` | MCP-Server: jedes Tool, Ressourcen, Prompts, Embedding-Modell (falls geladen) | keine |
 | `luna-mcp --check` | Einrichtung: Meeting-Ordner, Freigaben, Suchindex, Modell | keine |

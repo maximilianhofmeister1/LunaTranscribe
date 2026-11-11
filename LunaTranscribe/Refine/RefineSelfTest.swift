@@ -5,7 +5,7 @@ import LunaCore
 ///
 ///     open -n /Applications/LunaTranscribe.app --args --refine-selftest "ähm also ich wollte sagen dass dass wir morgen um um zehn uhr nein um elf uhr das meeting haben" --log /tmp/luna-refine.log
 ///
-/// Optional `--model lfm2_1_2b|qwen3_1_7b|appleIntelligence` (Standard: Einstellung),
+/// Optional `--model lfm2_1_2b|qwen3_1_7b|qwen3_4b|appleIntelligence|claudeHaiku` (Standard: Einstellung),
 /// `--language de|en|…` (Standard: Hauptsprache) und `--prompt <datei>` (Anweisung mit `{language}`,
 /// Standard: Einstellung) zum Vergleichen von Prompt-Varianten. Lädt das Modell, bereinigt den Text mehrmals
 /// (erster Lauf = kalt, weitere = warm), druckt Ergebnis und Dauer und beendet den Prozess.

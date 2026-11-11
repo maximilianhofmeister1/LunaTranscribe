@@ -1,17 +1,31 @@
-import Foundation
+import AppKit
 import Combine
+import Foundation
 import LunaCore
 import os
 
 /// Aufnahme des Meeting-Modus. Läuft unabhängig vom Diktat (`AppState`): eigener Recorder, eigene
 /// Statusmaschine, kein Overlay. Während des Meetings wird nur aufgenommen; „Beenden“ übergibt die
 /// Aufnahme an die `MeetingProcessingQueue` und ist sofort wieder bereit für das nächste Meeting.
+///
+/// Absturzsicher: Die Aufnahme schreibt von Anfang an in einen Auftragsordner der Warteschlange
+/// (`beginRecording`), die WAV trägt ihren Kopf alle paar Sekunden nach. Beendet sich die App, fährt
+/// der Mac herunter oder schläft er ein, wird ein laufendes Meeting regulär beendet und eingereiht.
 @MainActor
 final class MeetingSession: ObservableObject {
     enum Status: Equatable {
         case idle
         case recording(since: Date)
         case failed(String)
+    }
+
+    /// Wer die Aufnahme beendet. Bei Systemereignissen gibt es keinen Fehlerdialog – er würde das
+    /// Beenden bzw. Herunterfahren blockieren.
+    private enum StopReason: String {
+        case user
+        case appTerminating = "app terminating"
+        case powerOff = "power off / logout"
+        case sleep
     }
 
     @Published private(set) var status: Status = .idle
@@ -24,9 +38,12 @@ final class MeetingSession: ObservableObject {
     private let recorder = AudioRecorder()
     private let systemAudio = SystemAudioTap()
 
-    private var audioURL: URL?
-    private var recordingStart: Date?
+    /// Entwurf der laufenden Aufnahme in der Warteschlange.
+    private var recording: MeetingProcessingQueue.Recording?
     private var elapsedTimer: Timer?
+    private var systemObservers: [NSObjectProtocol] = []
+    /// Sudden/Automatic Termination ist während der Aufnahme abgeschaltet (muss ausgeglichen bleiben).
+    private var terminationGuarded = false
 
     var isRecording: Bool {
         if case .recording = status { return true }
@@ -37,7 +54,7 @@ final class MeetingSession: ObservableObject {
     init(settings: SettingsStore, queue: MeetingProcessingQueue) {
         self.settings = settings
         self.queue = queue
-        Self.removeOrphanedRecordings()
+        observeSystemEvents()
     }
 
     // MARK: Start / Stopp
@@ -51,21 +68,32 @@ final class MeetingSession: ObservableObject {
                 Permissions.openMicrophoneSettings()
                 return
             }
+            guard status == .idle || isFailed else { return }   // inzwischen doppelt gestartet
+
+            let draft: MeetingProcessingQueue.Recording
+            do {
+                // Sprache/Sprecherzahl vom Start – gelten nur, falls die Aufnahme unterbrochen wird.
+                draft = try queue.beginRecording(recordedAt: Date(), language: currentLanguage,
+                                                 expectedSpeakers: currentSpeakers)
+            } catch {
+                status = .failed("Die Aufnahme konnte nicht angelegt werden: \(error.localizedDescription)")
+                return
+            }
 
             let source = captureSource()
-            let url = Self.temporaryAudioURL()
             do {
-                try recorder.start(source: source, sink: .file(url))
+                try recorder.start(source: source, sink: .file(draft.audioURL))
             } catch {
                 systemAudio.destroy()
+                queue.discardRecording(draft)
                 status = .failed(error.localizedDescription)
                 return
             }
 
-            audioURL = url
-            recordingStart = Date()
+            recording = draft
             elapsed = 0
-            status = .recording(since: recordingStart!)
+            status = .recording(since: draft.job.recordedAt)
+            guardTermination(true)
             startElapsedTimer()
             Log.meeting.notice("meeting recording started, systemAudio=\(self.systemAudioActive)")
         }
@@ -74,37 +102,74 @@ final class MeetingSession: ObservableObject {
     /// Beendet die Aufnahme und reiht sie zur Verarbeitung im Hintergrund ein. Jeder Ausgang ist
     /// sichtbar (Status + Log), damit „Beenden“ nie stumm verpufft.
     func stop() {
-        guard isRecording, let url = audioURL, let start = recordingStart else { return }
+        stop(reason: .user)
+    }
+
+    private func stop(reason: StopReason) {
+        guard isRecording, let draft = recording else { return }
         stopCapture()
+        recording = nil
 
         let duration = recorder.recordedSeconds
-        Log.meeting.notice("meeting stopped after \(duration, format: .fixed(precision: 1)) s (elapsed \(self.elapsed, format: .fixed(precision: 0)) s)")
-        guard duration >= 1 else {
-            fail("Es kam kein Audio an (\(String(format: "%.1f", duration)) s aufgenommen). Mikrofon-/Systemaudio-Berechtigung prüfen.")
+        Log.meeting.notice("meeting stopped (\(reason.rawValue, privacy: .public)) after \(duration, format: .fixed(precision: 1)) s (elapsed \(self.elapsed, format: .fixed(precision: 0)) s)")
+        guard duration >= RecordingRecovery.minimumDuration else {
+            queue.discardRecording(draft)
+            if reason == .user {
+                fail("Es kam kein Audio an (\(String(format: "%.1f", duration)) s aufgenommen). Mikrofon-/Systemaudio-Berechtigung prüfen.")
+            } else {
+                status = .idle
+            }
             return
         }
 
-        do {
-            try queue.enqueue(recording: url, recordedAt: start, durationSeconds: duration,
-                              language: settings.languageForEngine(settings.primaryLanguage),
-                              expectedSpeakers: settings.meetingSpeakerCount > 0 ? settings.meetingSpeakerCount : nil)
-            audioURL = nil   // gehört jetzt der Warteschlange
-            recordingStart = nil
-            status = .idle
-        } catch {
-            fail("Die Aufnahme konnte nicht zur Verarbeitung abgelegt werden: \(error.localizedDescription)")
-        }
+        // Kann nicht scheitern: Klappt das Schreiben nicht, bleibt die Aufnahme als unterbrochene erhalten.
+        queue.finishRecording(draft, durationSeconds: duration, language: currentLanguage, expectedSpeakers: currentSpeakers)
+        status = .idle
     }
 
     /// Bricht die Aufnahme ab und verwirft sie.
     func cancel() {
         if isRecording { stopCapture() }
-        discardAudio()
+        if let draft = recording { queue.discardRecording(draft) }
+        recording = nil
         status = .idle
     }
 
     func dismissError() {
         if isFailed { status = .idle }
+    }
+
+    // MARK: Systemereignisse
+
+    /// Beenden, Herunterfahren/Abmelden und Ruhezustand beenden ein laufendes Meeting regulär – schnell
+    /// und ohne Dialog. Alles läuft synchron auf dem Main Thread, bevor die Benachrichtigung zurückkehrt.
+    /// Im Ruhezustand liefern Mikrofon und Tap ohnehin nichts, danach sind die Geräte oft neu verbunden.
+    private func observeSystemEvents() {
+        let events: [(NotificationCenter, Notification.Name, StopReason)] = [
+            (.default, NSApplication.willTerminateNotification, .appTerminating),
+            (NSWorkspace.shared.notificationCenter, NSWorkspace.willPowerOffNotification, .powerOff),
+            (NSWorkspace.shared.notificationCenter, NSWorkspace.willSleepNotification, .sleep),
+        ]
+        systemObservers = events.map { center, name, reason in
+            center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.stop(reason: reason) }
+            }
+        }
+    }
+
+    /// Während der Aufnahme darf macOS die App nicht still beenden (Sudden/Automatic Termination),
+    /// sonst kämen die Benachrichtigungen oben nie an.
+    private func guardTermination(_ on: Bool) {
+        guard on != terminationGuarded else { return }
+        terminationGuarded = on
+        let info = ProcessInfo.processInfo
+        if on {
+            info.disableSuddenTermination()
+            info.disableAutomaticTermination("Meeting-Aufnahme läuft")
+        } else {
+            info.enableSuddenTermination()
+            info.enableAutomaticTermination("Meeting-Aufnahme läuft")
+        }
     }
 
     // MARK: Intern
@@ -113,6 +178,9 @@ final class MeetingSession: ObservableObject {
         if case .failed = status { return true }
         return false
     }
+
+    private var currentLanguage: AppLanguage { settings.languageForEngine(settings.primaryLanguage) }
+    private var currentSpeakers: Int? { settings.meetingSpeakerCount > 0 ? settings.meetingSpeakerCount : nil }
 
     private func captureSource() -> CaptureSource {
         systemAudioActive = false
@@ -130,29 +198,24 @@ final class MeetingSession: ObservableObject {
         }
     }
 
+    /// Stoppt Recorder (WAV wird mit vollständigem Kopf geschlossen) und Tap.
     private func stopCapture() {
         stopElapsedTimer()
         _ = recorder.stop()
         systemAudio.destroy()
+        guardTermination(false)
     }
 
     private func fail(_ message: String) {
-        discardAudio()
         status = .failed(message)
         Log.meeting.error("meeting failed: \(message, privacy: .public)")
-    }
-
-    private func discardAudio() {
-        if let url = audioURL { try? FileManager.default.removeItem(at: url) }
-        audioURL = nil
-        recordingStart = nil
     }
 
     private func startElapsedTimer() {
         elapsedTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                guard let self, let start = self.recordingStart else { return }
-                self.elapsed = Date().timeIntervalSince(start)
+                guard let self, case .recording(let since) = self.status else { return }
+                self.elapsed = Date().timeIntervalSince(since)
             }
         }
     }
@@ -160,19 +223,5 @@ final class MeetingSession: ObservableObject {
     private func stopElapsedTimer() {
         elapsedTimer?.invalidate()
         elapsedTimer = nil
-    }
-
-    private static var temporaryFolder: URL { AppPaths.meetingRecordings }
-
-    /// Laufende Aufnahme unter ~/Library/Caches – zieht beim Beenden in die Warteschlange.
-    private static func temporaryAudioURL() -> URL {
-        temporaryFolder.appendingPathComponent("\(UUID().uuidString).wav")
-    }
-
-    /// Reste von Aufnahmen entfernen, die beim Absturz oder Beenden der App noch liefen. Beendete
-    /// Meetings liegen längst in der Warteschlange (`AppPaths.meetingQueue`) und sind nicht betroffen.
-    private static func removeOrphanedRecordings() {
-        guard let files = try? FileManager.default.contentsOfDirectory(at: temporaryFolder, includingPropertiesForKeys: nil) else { return }
-        for file in files { try? FileManager.default.removeItem(at: file) }
     }
 }

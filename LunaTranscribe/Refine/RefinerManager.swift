@@ -76,6 +76,8 @@ final class RefinerManager: ObservableObject {
         case .appleIntelligence:
             guard #available(macOS 26, *) else { return nil }
             return AppleIntelligenceRefiner()
+        case .claudeHaiku:
+            return ClaudeRefiner()
         }
     }
 

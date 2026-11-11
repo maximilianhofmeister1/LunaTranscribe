@@ -28,7 +28,8 @@ public enum AppPaths {
     /// Was Claude über luna-mcp gelesen und geändert hat (JSON Lines, nur IDs und Metadaten).
     public static var mcpActivityLog: URL { applicationSupport.appending(path: "mcp-activity.log") }
 
-    /// Laufende Meeting-Aufnahmen; wandern beim Beenden in die Warteschlange.
+    /// Bis 1.1.0 lagen laufende Meeting-Aufnahmen hier. Heute nimmt die App direkt in die Warteschlange
+    /// auf; der Ordner wird nur noch beim Start gelesen, um Reste einer abgebrochenen Aufnahme zu retten.
     public static var meetingRecordings: URL {
         directory(.cachesDirectory).appending(path: "LunaTranscribe/Meetings", directoryHint: .isDirectory)
     }

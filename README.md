@@ -6,7 +6,7 @@
 Lokale Diktier-App für die macOS-Menüleiste. Hotkey drücken → sprechen → Text wird in die aktive App eingefügt.
 Läuft komplett offline auf Apple Silicon (CoreML / Neural Engine) mit **Cohere Transcribe** oder **Parakeet TDT v3**.
 Dazu ein **Meeting-Modus**: Gespräch aufnehmen (Mikrofon + Systemaudio), danach Sprecher erkennen und als Text/Markdown exportieren.
-Und ein dritter Hotkey mit **Nachbearbeitung**: Ein lokales Sprachmodell (LFM2, Qwen3 oder Apple Intelligence) bereinigt
+Und ein dritter Hotkey mit **Nachbearbeitung**: Ein lokales Sprachmodell (LFM2, Qwen3 oder Apple Intelligence) – oder auf Wunsch Claude Haiku über die Claude CLI – bereinigt
 das Diktat – Rechtschreibung, Grammatik, Füllwörter, Wiederholungen, Versprecher – bevor es eingefügt wird.
 Ein **eigenes Wörterbuch** sorgt dafür, dass Namen und Fachbegriffe richtig geschrieben werden – und **lernt aus
 deinen Korrekturen**. Meetings landen als JSON in einer **Meeting-Bibliothek** in einem frei wählbaren Ordner und lassen
@@ -116,7 +116,7 @@ Fassung wieder her. Die Beispielpaare (Deutsch/Englisch) hängt die App automati
 Im Menü gibt es neben „Diktat starten“ auch „Diktat + Nachbearbeitung“ – identisch mit Hotkey 3.
 Meeting-Transkripte sind nicht betroffen.
 
-**Sicherheitsnetz:** Schlägt die Nachbearbeitung fehl (Modell lädt noch, Fehler, Timeout 20 s, unplausible Antwort),
+**Sicherheitsnetz:** Schlägt die Nachbearbeitung fehl (Modell lädt noch, Fehler, Timeout 20 s bzw. 30 s bei Claude, unplausible Antwort),
 wird der Rohtext eingefügt und das Overlay sagt es. Ein Diktat geht nie verloren. Im Verlauf („Letzte Diktate“) sind
 nachbearbeitete Einträge mit ✨ markiert; der Rohtext steht im Tooltip.
 
@@ -128,6 +128,7 @@ Modelle (Einstellungen → Nachbearbeitung), Richtwerte für ein Diktat mit 2–
 | **Qwen3 1.7B** | ~1 GB | ~1,3 GB | ~1 s | Konservativ: lässt Selbstkorrekturen lieber stehen („um zehn, nein um elf Uhr“); gutes Englisch |
 | **Qwen3 4B** | ~2,3 GB | ~2,8 GB | ~2–2,5 s | Löst Selbstkorrekturen innerhalb eines Satzes („am Montag nein am Dienstag … bei mir nein bei dir“ → „am Dienstag … bei dir“) |
 | **Apple Intelligence** | – | – | ~1 s | Apples Systemmodell (macOS 26+), läuft auf der Neural Engine. Ausgegraut, solange Apple Intelligence nicht aktiv ist |
+| **Claude Haiku 5.5** | – | – | ~3–5 s | **Cloud** über die lokale Claude CLI (`--model claude-haiku-5-5 --effort low`), dein Claude-Konto, kein API-Schlüssel. Das Diktat geht an Anthropic |
 
 Grenze aller drei: Wird ein **ganzer Satz** wiederholt und korrigiert („Heute ist ein schöner Tag. Nein, morgen ist ein
 schöner Tag …“), lesen sie das „nein“ als Fortsetzung und behalten beide Sätze – dafür bräuchte es ein größeres Modell
@@ -141,6 +142,11 @@ Fehlt der Eintrag „Apple Intelligence“ in den Systemeinstellungen, liegt das
 Gerätesprache nicht übereinstimmen** (z. B. Siri Englisch, Gerät Deutsch) – beide auf dieselbe unterstützte Sprache
 stellen. Seit macOS 15.4 ist Apple Intelligence auch in der EU verfügbar. Die Einstellungen zeigen den konkreten Grund.
 Apples Inhaltsfilter können in seltenen Fällen einen Text ablehnen – dann greift das Sicherheitsnetz.
+
+**Claude Haiku** nutzt dieselbe Claude CLI wie die Meeting-Zusammenfassung (Pfad: Einstellungen → Meetings) – ohne
+Werkzeuge, MCP-Server, Projekteinstellungen oder gespeicherte Sitzung, mit niedrigem Aufwand. Die CLI startet bei jedem
+Diktat neu, deshalb dauert es länger als lokal. Ist sie nicht angemeldet, sagt das Overlay „Claude CLI nicht angemeldet“
+und fügt den Rohtext ein – dann im Terminal einmal `claude` starten und anmelden.
 
 ## Eigenes Wörterbuch
 
@@ -203,8 +209,8 @@ Umformulierungen (weniger als die Hälfte der Wörter blieb gleich, oder zu unä
 
 ## Meeting-Modus
 
-Menüleiste → **Meeting starten**. Während des Meetings wird nur aufgenommen (16 kHz mono in eine
-temporäre WAV-Datei, kaum CPU-Last) – **Diktieren per Hotkey funktioniert währenddessen ganz normal**
+Menüleiste → **Meeting starten**. Während des Meetings wird nur aufgenommen (16 kHz mono als WAV-Datei direkt
+in die Warteschlange, kaum CPU-Last) – **Diktieren per Hotkey funktioniert währenddessen ganz normal**
 und landet ebenfalls im Meeting-Transkript. Escape wirkt nur auf das Diktat; ein Meeting wird
 ausschließlich über das Menü beendet oder verworfen.
 
@@ -220,6 +226,12 @@ Die Warteschlange liegt unter `~/Library/Application Support/LunaTranscribe/Queu
 Sprache und Personenzahl). **Beendest du die App mit wartenden Meetings, geht es beim nächsten Start weiter.** Schlägt eine
 Verarbeitung fehl, bleibt die Aufnahme erhalten: im Menü „Erneut versuchen“ oder „Verwerfen“. Ein Meeting lässt sich auch
 starten, während die Modelle noch laden – die Verarbeitung wartet dann einfach.
+
+**Absturzsicher:** Die Aufnahme liegt schon während des Meetings in der Warteschlange und wird alle zwei Sekunden auf die
+Platte gesichert. Beendest du die App, fährst den Mac herunter, meldest dich ab oder klappst ihn zu, wird ein laufendes
+Meeting regulär beendet und eingereiht. Stürzt die App ab oder geht der Strom weg, erscheint die Aufnahme beim nächsten
+Start als **„Unterbrochene Aufnahme“** (mit Mitteilung) – „Transkription starten“ verarbeitet sie, „Verwerfen“ löscht
+sie. Automatisch verarbeitet oder gelöscht wird dabei nichts (außer Entwürfen unter einer Sekunde).
 
 Richtwerte: 1 h Meeting ≈ 1–2 min Verarbeitung mit Parakeet, ≈ 5 min mit Cohere – im Hintergrund, parallel zu Diktat
 und neuer Aufnahme. Beim allerersten Mal
@@ -269,13 +281,15 @@ Löschen (Papierkorb).
 Im Meeting auf **Zusammenfassen** klicken: LunaTranscribe ruft die lokal installierte **Claude CLI** auf
 (`claude -p`, ohne Werkzeuge, ohne MCP, ohne Projektkontext, ohne gespeicherte Sitzung) und legt Kurzfassung,
 Themen, Entscheidungen, Aufgaben und offene Fragen im Tab „Zusammenfassung“ und als `summary.md` ab. Dauer je nach
-Länge 10–60 s.
+Länge 10–60 s. Die Themen stehen als fette Stichpunkte da, ihre Unterpunkte sind eingerückt – so bleibt auch eine
+lange Zusammenfassung überfliegbar.
 
 - **Voraussetzung**: Claude CLI installiert und angemeldet (`curl -fsSL https://claude.ai/install.sh | bash`, dann
   einmal `claude` starten). Die App sucht sie in `~/.local/bin`, Homebrew und der Login-Shell; ein eigener Pfad und
   ein Modell (z. B. `sonnet`) lassen sich unter Einstellungen → Meetings setzen, „Testen“ prüft Pfad und Version.
 - **Anweisung**: Einstellungen → Meetings → „Anweisung für die Zusammenfassung“, frei editierbar (`{language}` = Sprache
-  des Meetings), „Auf Standard zurücksetzen“ stellt die mitgelieferte Fassung wieder her.
+  des Meetings), „Auf Standard zurücksetzen“ stellt die mitgelieferte Fassung wieder her. Eine eigene Anweisung bleibt bei Updates
+  unverändert.
 - **Local-First bleibt ehrlich**: Die Transkription ist lokal. Für die Zusammenfassung geht der Text des Meetings über
   dein Claude-Konto an Anthropic. Beim ersten Mal erklärt ein Hinweis das; der Button trägt ein Wolken-Symbol.
 
@@ -344,7 +358,8 @@ Technik und Entscheidungen: [docs/MCP-Server-Plan.md](docs/MCP-Server-Plan.md).
 - Meeting-Audio liegt während Aufnahme und Verarbeitung temporär unter `~/Library/Caches/LunaTranscribe/Meetings`
   und wird danach gelöscht – außer „Aufnahme behalten“ ist aktiv, dann wandert die WAV in den Meeting-Ordner.
   Transkripte liegen als `meeting.json` im Meeting-Ordner.
-- Der Rohtext eines Diktats mit Nachbearbeitung geht nur in das lokale Sprachmodell auf diesem Mac.
+- Der Rohtext eines Diktats mit Nachbearbeitung geht nur in das lokale Sprachmodell auf diesem Mac – außer du wählst
+  Claude Haiku, dann geht er über die Claude CLI an Anthropic.
 - Keine Analytics, kein Account. Netzwerk nur für den einmaligen Modell-Download (ASR + Sprecher-Modelle + Sprachmodell +
   Wörterbuch-Zusatzmodell, optional Embedding-Modell) – und, **nur auf Klick**, für eine Meeting-Zusammenfassung über die
   Claude CLI (Text an Anthropic).

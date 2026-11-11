@@ -17,7 +17,8 @@ public enum SummaryPrompt {
     Drei bis fünf Sätze: Worum ging es, was ist das Ergebnis?
 
     ## Themen
-    Die besprochenen Themen als Stichpunkte, jeweils mit den wichtigsten Aussagen.
+    Jedes besprochene Thema als fetter Stichpunkt („- **Thema**“), darunter die wichtigsten Aussagen \
+    als um zwei Leerzeichen eingerückte Unterpunkte.
 
     ## Entscheidungen
     Was wurde beschlossen? Schreibe „Keine“, wenn nichts beschlossen wurde.
