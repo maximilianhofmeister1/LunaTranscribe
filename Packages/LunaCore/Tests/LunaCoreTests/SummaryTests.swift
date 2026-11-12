@@ -27,6 +27,29 @@ struct SummaryTests {
         #expect(!instructions.contains(SummaryPrompt.placeholder))
     }
 
+    @Test("Überschriften: bekannte Sprachen fest übersetzt, Deutsch und andere mit Bitte, eigene Anweisung bleibt")
+    func localizesHeadings() {
+        let english = SummaryPrompt.instructions(template: SummaryPrompt.defaultTemplate, language: .english)
+        #expect(english.contains("\n## Summary\n") && english.contains("\n## Open Questions\n"))
+        #expect(!english.contains("## Kurzfassung"))
+        #expect(english.hasSuffix("„## Open Questions“."))
+
+        let german = SummaryPrompt.instructions(template: SummaryPrompt.defaultTemplate, language: .german)
+        #expect(german.contains("\n## Kurzfassung\n"))
+        #expect(german.contains("mit genau diesen Abschnitten (Überschriften auf Deutsch):"))
+        #expect(german.hasSuffix("ohne Einleitung oder Schlusssatz."))
+
+        let czech = SummaryPrompt.instructions(template: SummaryPrompt.defaultTemplate, language: .czech)
+        #expect(czech.contains("\n## Kurzfassung\n"))
+        #expect(czech.hasSuffix("übersetze sie auf Tschechisch."))
+
+        #expect(SummaryPrompt.instructions(template: "Fasse auf {language} zusammen.", language: .english)
+                == "Fasse auf Englisch zusammen.")
+        for language in AppLanguage.allCases {
+            #expect(SummaryPrompt.headings(for: language).map(\.count) ?? 5 == 5)
+        }
+    }
+
     @Test("Bearbeiten setzt Text und Zeitpunkt, behält Herkunft; ohne Änderung bleibt alles gleich")
     func revise() {
         let created = Date(timeIntervalSince1970: 1_790_000_000)
