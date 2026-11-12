@@ -11,7 +11,7 @@ namespace LunaTranscribe.Summary;
 /// <summary>
 /// Entwickler-Einstieg für die Zusammenfassung über die Claude CLI – über denselben Code wie der Button in der App
 /// (<see cref="ClaudeCli"/>, <see cref="SummaryPrompt"/>), ohne Modelle:
-/// <code>LunaTranscribe.exe --summary-selftest [meeting.json] [--cli C:\pfad\claude.exe] [--model sonnet] [--language en]</code>
+/// <code>LunaTranscribe.exe --summary-selftest [meeting.json] [--cli C:\pfad\claude.exe] [--model sonnet] [--language en] [--prompt anweisung.txt]</code>
 /// Ohne Datei fasst der Test ein kurzes eingebautes Gespräch zusammen. <c>--cli</c> mit einem falschen Pfad prüft die
 /// Meldung „CLI nicht gefunden“. Achtung: Der Text geht an Anthropic.
 /// </summary>
@@ -24,6 +24,8 @@ public static class SummarySelfTest
         var cliPath = Value("--cli", args) ?? "";
         var model = Value("--model", args);
         var languageCode = Value("--language", args);
+        // Eigene Anweisung (mit {language}) zum Vergleichen von Prompt-Varianten, ohne neu zu bauen.
+        var promptFile = Value("--prompt", args);
         AppLanguage? language = null;
         if (languageCode != null)
         {
@@ -40,10 +42,12 @@ public static class SummarySelfTest
             var cli = ClaudeCli.Locate(cliPath) ?? throw ClaudeCliException.NotFound();
             SelfTests.Print($"CLI: {cli.Executable} · {await cli.VersionAsync()}");
             SelfTests.Print($"Meeting: {transcript.Title}, {transcript.Turns.Count} Beiträge, {transcript.WordCount} Wörter\n");
+            var instructions = SummaryPrompt.Instructions(promptFile != null ? File.ReadAllText(promptFile) : SummaryPrompt.DefaultTemplate,
+                language ?? transcript.Language);
+            var input = transcript.Render(MeetingTranscript.ExportFormat.Text);
+            if (args.Contains("--show-prompt")) SelfTests.Print($"--- Anweisung ---\n{instructions}\n--- Eingabe ---\n{input}\n---\n");
             var sw = Stopwatch.StartNew();
-            var summary = await cli.CompleteAsync(
-                SummaryPrompt.Instructions(SummaryPrompt.DefaultTemplate, language ?? transcript.Language),
-                transcript.Render(MeetingTranscript.ExportFormat.Text), model);
+            var summary = await cli.CompleteAsync(instructions, input, model);
             SelfTests.Print(summary);
             SelfTests.Print($"\n({sw.Elapsed.TotalSeconds:0.0} s)");
             return 0;

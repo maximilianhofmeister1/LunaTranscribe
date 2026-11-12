@@ -36,6 +36,26 @@ public class SummaryTests
         Assert.DoesNotContain(SummaryPrompt.Placeholder, instructions);
     }
 
+    [Fact(DisplayName = "Überschriften: bekannte Sprachen fest übersetzt, Deutsch und andere unverändert, eigene Anweisung bleibt")]
+    public void LocalizesHeadings()
+    {
+        var english = SummaryPrompt.Instructions(SummaryPrompt.DefaultTemplate, AppLanguage.English);
+        Assert.Contains("\n## Summary\n", english);
+        Assert.Contains("\n## Open Questions\n", english);
+        Assert.DoesNotContain("## Kurzfassung", english);
+        var german = SummaryPrompt.Instructions(SummaryPrompt.DefaultTemplate, AppLanguage.German);
+        Assert.Contains("\n## Kurzfassung\n", german);
+        var czech = SummaryPrompt.Instructions(SummaryPrompt.DefaultTemplate, AppLanguage.Czech);
+        Assert.Contains("\n## Kurzfassung\n", czech);
+        Assert.Contains("Überschriften auf Tschechisch", czech);
+        Assert.EndsWith("übersetze sie auf Tschechisch.", czech);
+        Assert.EndsWith("„## Open Questions“.", english);
+        Assert.EndsWith("ohne Einleitung oder Schlusssatz.", german);
+        Assert.Equal("Fasse auf Englisch zusammen.", SummaryPrompt.Instructions("Fasse auf {language} zusammen.", AppLanguage.English));
+        foreach (var language in Enum.GetValues<AppLanguage>())
+            Assert.True(SummaryPrompt.Headings(language) is null or { Length: 5 });
+    }
+
     [Fact(DisplayName = "Bearbeiten setzt Text und Zeitpunkt, behält Herkunft; ohne Änderung bleibt alles gleich")]
     public void Revise()
     {
