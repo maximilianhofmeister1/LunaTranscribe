@@ -18,7 +18,7 @@
     <RootNamespace>LunaTranscribe</RootNamespace>
     <ApplicationIcon>Assets\LunaTranscribe.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Authors>Maximilian Hofmeister</Authors>
     <Copyright>© 2026 Maximilian Hofmeister</Copyright>
     <Product>LunaTranscribe</Product>
