@@ -44,7 +44,12 @@ public sealed class MeetingSummarizer : INotifyPropertyChanged
     /// <summary>Letzter Fehler je Meeting (bis zum nächsten Versuch).</summary>
     public string? Error(Guid id) => _errors.TryGetValue(id, out var e) ? e : null;
 
-    public void Summarize(MeetingTranscript transcript)
+    /// <summary>
+    /// Fasst <paramref name="transcript"/> in <paramref name="language"/> zusammen (Wahl im Meeting, vorbelegt aus
+    /// <see cref="SettingsStore.SummaryLanguage"/>). Ersetzt eine vorhandene – auch bearbeitete – Zusammenfassung; das
+    /// Nachfragen ist Sache der Oberfläche.
+    /// </summary>
+    public void Summarize(MeetingTranscript transcript, AppLanguage language)
     {
         var id = transcript.Id;
         if (_tasks.ContainsKey(id)) return;
@@ -60,18 +65,19 @@ public sealed class MeetingSummarizer : INotifyPropertyChanged
             SetError(id, ClaudeCliException.NotFound().Message);
             return;
         }
-        var instructions = SummaryPrompt.Instructions(_settings.SummaryPrompt, transcript.Language);
+        var instructions = SummaryPrompt.Instructions(_settings.SummaryPrompt, language);
         var input = transcript.Render(MeetingTranscript.ExportFormat.Text);
         var model = _settings.ClaudeModel.Trim();
 
         var cts = new CancellationTokenSource();
         _tasks[id] = cts;
         Changed();
-        Log.Write($"summary started: {transcript.WordCount} words via {cli.Executable}");
-        _ = RunAsync(id, cli, instructions, input, model.Length == 0 ? null : model, cts);
+        Log.Write($"summary started: {transcript.WordCount} words in {language.Code()} via {cli.Executable}");
+        _ = RunAsync(id, cli, instructions, input, model.Length == 0 ? null : model, language, cts);
     }
 
-    private async Task RunAsync(Guid id, ClaudeCli cli, string instructions, string input, string? model, CancellationTokenSource cts)
+    private async Task RunAsync(Guid id, ClaudeCli cli, string instructions, string input, string? model, AppLanguage language,
+        CancellationTokenSource cts)
     {
         var sw = Stopwatch.StartNew();
         try
@@ -79,7 +85,7 @@ public sealed class MeetingSummarizer : INotifyPropertyChanged
             var markdown = await cli.CompleteAsync(instructions, input, model, ct: cts.Token);
             if (!IsCurrent(id, cts)) return;
             _tasks.Remove(id);
-            Finish(id, new MeetingSummary(markdown, DateTime.UtcNow, model));
+            Finish(id, new MeetingSummary(markdown, DateTime.UtcNow, model, language));
             Log.Write($"summary done in {sw.Elapsed.TotalSeconds:0.0}s");
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested)

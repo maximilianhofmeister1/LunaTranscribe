@@ -19,14 +19,17 @@ using LunaTranscribe.UI.Theme;
 namespace LunaTranscribe.UI.Pages;
 
 /// <summary>
-/// Ein Meeting: Titel, Aktionen (Zusammenfassen, Export, Explorer, Löschen) und zwei Tabs – Transkript (Sprecher
-/// benennen, Beiträge korrigieren) und Zusammenfassung (Pendant zu MeetingDetailView.swift). Besitzt das
+/// Ein Meeting: Titel, Aktionen (Zusammenfassen in wählbarer Sprache, Export, Explorer, Löschen) und zwei Tabs –
+/// Transkript (Sprecher benennen, Beiträge korrigieren) und Zusammenfassung (lesen, bearbeiten mit Strg+E / Strg+S /
+/// Esc) – Pendant zu MeetingDetailView.swift und MeetingSummaryTab.swift. Besitzt das
 /// <see cref="MeetingDocument"/> und gibt es in <see cref="Close"/> frei (speichert Ausstehendes).
 /// </summary>
 public sealed class MeetingDetailView : UserControl
 {
     /// <summary>Nur für UI-Snapshots: mit dem Tab „Zusammenfassung“ öffnen.</summary>
     internal static bool StartOnSummaryTab;
+    /// <summary>Nur für UI-Snapshots: Zusammenfassung gleich im Bearbeiten öffnen.</summary>
+    internal static bool StartEditingSummary;
 
     private readonly AppState _state;
     private readonly MeetingDocument _doc;
@@ -34,6 +37,10 @@ public sealed class MeetingDetailView : UserControl
     private string? _actionMessage;
     private bool _actionFailed;
     private bool _updatingTitle;
+    /// <summary>Im Menü gewählte Sprache für die nächste Zusammenfassung; null = Vorbelegung (<see cref="DefaultSummaryLanguage"/>).</summary>
+    private AppLanguage? _chosenSummaryLanguage;
+    /// <summary>Entwurf der Zusammenfassung während des Bearbeitens; null = nicht im Bearbeiten. Übersteht Tab-Wechsel.</summary>
+    private string? _summaryDraft;
 
     private readonly TextBox _title;
     private readonly WrapPanel _chips = new();
@@ -93,9 +100,11 @@ public sealed class MeetingDetailView : UserControl
         scroll.SetResourceReference(BackgroundProperty, "Luna.Background");
         Content = scroll;
 
+        if (StartEditingSummary && _doc.Transcript.Summary is { } initial) _summaryDraft = initial.Markdown;
         RefreshHeader();
         BuildActions();
         BuildTab();
+        PreviewKeyDown += OnPreviewKeyDown;
 
         Loaded += (_, _) =>
         {
@@ -116,6 +125,13 @@ public sealed class MeetingDetailView : UserControl
 
     private MeetingTranscript Transcript => _doc.Transcript;
     private bool IsSummarizing => _state.Summarizer.IsRunning(_doc.Id);
+    private bool IsEditingSummary => _summaryDraft != null;
+
+    /// <summary>Sprache einer vorhandenen Zusammenfassung, sonst der Standard aus den Einstellungen.</summary>
+    private AppLanguage DefaultSummaryLanguage =>
+        Transcript.Summary?.Language ?? _state.Settings.SummaryLanguage.Resolved(Transcript.Language);
+
+    private AppLanguage SummaryLanguage => _chosenSummaryLanguage ?? DefaultSummaryLanguage;
 
     // MARK: Änderungen
 
@@ -207,16 +223,18 @@ public sealed class MeetingDetailView : UserControl
         {
             var summarize = new Button
             {
-                Content = t.Summary == null ? "Zusammenfassen" : "Neu zusammenfassen", IsEnabled = !t.Confidential && !_doc.IsDeleted,
+                Content = t.Summary == null ? "Zusammenfassen" : "Neu zusammenfassen",
+                IsEnabled = !t.Confidential && !_doc.IsDeleted && !IsEditingSummary,
             }.Styled("Luna.Primary");
             Luna.SetIcon(summarize, IconKind.Sparkles);
             // Deaktivierte Knöpfe zeigen ihren Tooltip nur so.
             ToolTipService.SetShowOnDisabled(summarize, true);
-            summarize.ToolTip = t.Confidential
-                ? "Vertrauliche Meetings werden nicht an Claude geschickt."
+            summarize.ToolTip = t.Confidential ? "Vertrauliche Meetings werden nicht an Claude geschickt."
+                : IsEditingSummary ? "Erst die Bearbeitung der Zusammenfassung sichern oder abbrechen."
                 : "Fasst das Meeting über die Claude CLI zusammen (Text geht an Anthropic)";
             summarize.Click += (_, _) => RequestSummary();
             left.Children.Add(summarize);
+            left.Children.Add(SummaryLanguageButton());
         }
 
         var export = new Button { Content = "Exportieren" }.Styled("Luna.Secondary");
@@ -234,10 +252,19 @@ public sealed class MeetingDetailView : UserControl
         Luna.SetIcon(delete, IconKind.Trash);
         delete.Click += (_, _) => Delete();
 
+        // Umbrechen statt überlappen, wenn das Fenster schmal ist (Sprachmenü macht die Zeile breiter).
+        var buttons = new WrapPanel();
+        foreach (var child in left.Children.Cast<FrameworkElement>().ToList())
+        {
+            left.Children.Remove(child);
+            child.Margin = new Thickness(0, 0, 8, 6);
+            buttons.Children.Add(child);
+        }
         var row = new DockPanel();
         DockPanel.SetDock(delete, Dock.Right);
+        delete.VerticalAlignment = VerticalAlignment.Top;
         row.Children.Add(delete);
-        row.Children.Add(left);
+        row.Children.Add(buttons);
 
         var stack = new VStack { Spacing = 6 };
         stack.Children.Add(row);
@@ -272,9 +299,47 @@ public sealed class MeetingDetailView : UserControl
         return item;
     }
 
+    /// <summary>
+    /// Sprache der nächsten Zusammenfassung: oben die Sprache des Meetings, darunter alle anderen alphabetisch
+    /// (Pendant zu SummaryLanguageMenu).
+    /// </summary>
+    private Button SummaryLanguageButton()
+    {
+        var selected = SummaryLanguage;
+        var button = new Button
+        {
+            Content = selected.DisplayName(), IsEnabled = !Transcript.Confidential,
+            ToolTip = "Sprache der Zusammenfassung – Standard unter Einstellungen → Meetings",
+        }.Styled("Luna.Secondary");
+        Luna.SetIcon(button, IconKind.Globe);
+        var menu = new ContextMenu();
+        void Add(AppLanguage language, string header)
+        {
+            var item = new MenuItem { Header = header, IsCheckable = true, IsChecked = language == selected };
+            item.Click += (_, _) => { _chosenSummaryLanguage = language; BuildActions(); };
+            menu.Items.Add(item);
+        }
+        var meetingLanguage = Transcript.Language;
+        Add(meetingLanguage, $"{meetingLanguage.DisplayName()} (Sprache des Meetings)");
+        menu.Items.Add(new Separator());
+        foreach (var language in AppLanguageSorting.SortedByDisplayName.Where(l => l != meetingLanguage))
+            Add(language, language.DisplayName());
+        button.ContextMenu = menu;
+        button.Click += (_, _) => MenuButton.Open(button);
+        return button;
+    }
+
+    /// <summary>Reihenfolge der Rückfragen: erst „bearbeitete Fassung ersetzen?“, dann der einmalige Cloud-Hinweis.</summary>
     private void RequestSummary()
     {
         _summaryTab.IsChecked = true;
+        if (Transcript.Summary?.IsEdited == true)
+        {
+            var replace = LunaDialog.Confirm(this, "Bearbeitete Zusammenfassung ersetzen?",
+                "Du hast diese Zusammenfassung bearbeitet. Eine neue Zusammenfassung von Claude ersetzt deine Änderungen.",
+                "Neu zusammenfassen");
+            if (!replace) return;
+        }
         if (!_state.Settings.SummaryCloudNoticeAccepted)
         {
             var choice = LunaDialog.Show(this, "Zusammenfassung mit Claude",
@@ -286,7 +351,7 @@ public sealed class MeetingDetailView : UserControl
             _state.Settings.SummaryCloudNoticeAccepted = true;
         }
         _doc.Flush();   // aktuelle Namen/Korrekturen mitschicken
-        _state.Summarizer.Summarize(_doc.Transcript);
+        _state.Summarizer.Summarize(_doc.Transcript, SummaryLanguage);
     }
 
     private void Export(MeetingTranscript.ExportFormat format, bool includeSummary)
@@ -403,12 +468,7 @@ public sealed class MeetingDetailView : UserControl
 
         if (t.Summary is { } summary)
         {
-            var content = new VStack { Spacing = 10 };
-            content.Children.Add(new MarkdownView(summary.Markdown));
-            content.Children.Add(new Separator { Margin = new Thickness(0, 4, 0, 0) });
-            var model = summary.Model is { Length: > 0 } m ? $" ({m})" : "";
-            content.Children.Add(new TextBlock { Text = $"Erstellt {LunaDates.DateTime(summary.CreatedAt)} mit Claude{model}", FontSize = 11 }.Styled("Luna.Caption"));
-            stack.Children.Add(new LunaCard { Padding = new Thickness(20), Content = content });
+            stack.Children.Add(_summaryDraft is { } draft ? SummaryEditor(draft) : SummaryCard(summary));
         }
         else if (!IsSummarizing)
         {
@@ -417,14 +477,128 @@ public sealed class MeetingDetailView : UserControl
             content.Children.Add(new TextBlock
             {
                 Text = "„Zusammenfassen“ schickt das Transkript über die Claude CLI an Claude und legt Kurzfassung, Themen, Entscheidungen, " +
-                       "Aufgaben und offene Fragen hier ab. Die Anweisung passt du unter Einstellungen → Meetings an.",
+                       "Aufgaben und offene Fragen hier ab. Die Sprache wählst du daneben, Standard und Anweisung unter Einstellungen → Meetings.",
             }.Styled("Luna.Hint"));
-            var adjust = new Button { Content = "Anweisung anpassen…", HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(-6, 0, 0, 0) }.Styled("Luna.Quiet");
+            var adjust = new Button { Content = "Einstellungen öffnen…", HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(-6, 0, 0, 0) }.Styled("Luna.Quiet");
             adjust.Click += (_, _) => _state.OpenSettings(SettingsSection.Meetings);
             content.Children.Add(adjust);
             stack.Children.Add(new LunaCard { Content = content });
         }
         return stack;
+    }
+
+    private FrameworkElement SummaryCard(MeetingSummary summary)
+    {
+        var edit = new Button { Content = "Bearbeiten", IsEnabled = !IsSummarizing && !_doc.IsDeleted }.Styled("Luna.Quiet");
+        Luna.SetIcon(edit, IconKind.Pencil);
+        edit.ToolTip = "Zusammenfassung umschreiben (Strg+E) – wird im Meeting und in summary.md gespeichert";
+        edit.Click += (_, _) => BeginSummaryEdit();
+        var origin = new TextBlock { Text = Origin(summary), FontSize = 11.5, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap }
+            .Styled("Luna.Caption");
+        var head = new DockPanel();
+        DockPanel.SetDock(edit, Dock.Right);
+        head.Children.Add(edit);
+        head.Children.Add(origin);
+
+        var stack = new VStack { Spacing = 8 };
+        stack.Children.Add(head);
+        stack.Children.Add(new LunaCard { Padding = new Thickness(20), Content = new MarkdownView(summary.Markdown) });
+        return stack;
+    }
+
+    /// <summary>
+    /// Markdown-Quelltext der Zusammenfassung bearbeiten. Feste Schriftbreite, weil die Einrückung die Gliederung bestimmt
+    /// (<see cref="MarkdownBlock"/>). Strg+S sichert, Esc bricht ab.
+    /// </summary>
+    private FrameworkElement SummaryEditor(string draft)
+    {
+        var editor = new TextBox
+        {
+            Text = draft, AcceptsReturn = true, AcceptsTab = true, TextWrapping = TextWrapping.Wrap, MinHeight = 380, FontSize = 12.5,
+            FontFamily = new FontFamily("Cascadia Mono, Consolas"), VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Padding = new Thickness(8), VerticalContentAlignment = VerticalAlignment.Top,
+        };
+        var save = new Button { Content = "Sichern", IsEnabled = draft.Trim().Length > 0, ToolTip = "Strg+S" }.Styled("Luna.Primary");
+        editor.TextChanged += (_, _) =>
+        {
+            if (_summaryDraft == null) return;   // schon gesichert/abgebrochen
+            _summaryDraft = editor.Text;
+            save.IsEnabled = editor.Text.Trim().Length > 0;
+        };
+        save.Click += (_, _) => SaveSummaryEdit();
+        var cancel = new Button { Content = "Abbrechen", ToolTip = "Esc" }.Styled("Luna.Quiet");
+        cancel.Click += (_, _) => CancelSummaryEdit();
+        var buttons = new HStack { Spacing = 8 };
+        buttons.Children.Add(save);
+        buttons.Children.Add(cancel);
+
+        var stack = new VStack { Spacing = 10 };
+        stack.Children.Add(new SectionTitle { Title = "Zusammenfassung bearbeiten", Icon = IconKind.Pencil });
+        stack.Children.Add(editor);
+        stack.Children.Add(new TextBlock
+        {
+            Text = "Markdown: „## “ für Überschriften, „- “ für Punkte, zwei Leerzeichen davor rücken ein, „- [ ] “ für Aufgaben, **fett** für Hervorhebungen.",
+        }.Styled("Luna.Hint"));
+        stack.Children.Add(buttons);
+        editor.Loaded += (_, _) => { editor.Focus(); editor.CaretIndex = 0; };
+        return new LunaCard { Content = stack };
+    }
+
+    private void BeginSummaryEdit()
+    {
+        if (Transcript.Summary is not { } summary || IsSummarizing || _doc.IsDeleted) return;
+        _summaryDraft = summary.Markdown;
+        _summaryTab.IsChecked = true;
+        BuildActions();
+        BuildTab();
+    }
+
+    private void SaveSummaryEdit()
+    {
+        if (_summaryDraft is not { } draft || draft.Trim().Length == 0) return;
+        _summaryDraft = null;
+        _doc.ReviseSummary(draft);
+        BuildActions();
+        BuildTab();
+    }
+
+    private void CancelSummaryEdit()
+    {
+        if (_summaryDraft == null) return;
+        _summaryDraft = null;
+        BuildActions();
+        BuildTab();
+    }
+
+    /// <summary>Strg+E bearbeitet, Strg+S sichert, Esc bricht das Bearbeiten ab.</summary>
+    private void OnPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        var ctrl = Keyboard.Modifiers == ModifierKeys.Control;
+        if (ctrl && e.Key == Key.E && !IsEditingSummary && Transcript.Summary != null)
+        {
+            BeginSummaryEdit();
+            e.Handled = true;
+        }
+        else if (ctrl && e.Key == Key.S && IsEditingSummary)
+        {
+            SaveSummaryEdit();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape && IsEditingSummary)
+        {
+            CancelSummaryEdit();
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>„Erstellt 21.09.2026, 10:00 mit Claude (sonnet) · Englisch · bearbeitet 21.09.2026, 10:05“</summary>
+    internal static string Origin(MeetingSummary summary)
+    {
+        var model = summary.Model is { Length: > 0 } m ? $" ({m})" : "";
+        var parts = new List<string> { $"Erstellt {LunaDates.DateTime(summary.CreatedAt)} mit Claude{model}" };
+        if (summary.Language is { } language) parts.Add(language.DisplayName());
+        if (summary.EditedAt is { } edited) parts.Add($"bearbeitet {LunaDates.DateTime(edited)}");
+        return string.Join(" · ", parts);
     }
 
     // MARK: Helfer

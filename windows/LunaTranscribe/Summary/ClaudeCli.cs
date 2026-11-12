@@ -17,6 +17,9 @@ public sealed class ClaudeCliException : Exception
 {
     public ClaudeCliErrorKind Kind { get; }
 
+    /// <summary>Die CLI ist installiert, aber nicht angemeldet („Not logged in“, Auth-Fehler).</summary>
+    public bool IsNotLoggedIn { get; private init; }
+
     private ClaudeCliException(ClaudeCliErrorKind kind, string message) : base(message) => Kind = kind;
 
     public static ClaudeCliException NotFound() => new(ClaudeCliErrorKind.NotFound,
@@ -28,7 +31,8 @@ public sealed class ClaudeCliException : Exception
         var detail = message.Trim();
         if (detail.Contains("login", StringComparison.OrdinalIgnoreCase) || detail.Contains("auth", StringComparison.OrdinalIgnoreCase))
             return new(ClaudeCliErrorKind.Failed,
-                $"Die Claude CLI ist nicht angemeldet. Im Terminal einmal „claude“ starten und anmelden. ({Shorten(detail)})");
+                $"Die Claude CLI ist nicht angemeldet. Im Terminal einmal „claude“ starten und anmelden. ({Shorten(detail)})")
+            { IsNotLoggedIn = true };
         return new(ClaudeCliErrorKind.Failed,
             $"Die Claude CLI ist mit Code {status} abgebrochen: {(detail.Length == 0 ? "keine Meldung" : Shorten(detail))}");
     }
@@ -211,7 +215,9 @@ public sealed class ClaudeCli
         ExecuteAsync(new List<string> { "--version" }, input: null, systemPrompt: null, TimeSpan.FromSeconds(20), ct);
 
     /// <summary>Schickt <paramref name="input"/> mit der System-Anweisung <paramref name="instructions"/> an Claude und gibt die Antwort zurück.</summary>
-    public async Task<string> CompleteAsync(string instructions, string input, string? model, TimeSpan? timeout = null, CancellationToken ct = default)
+    /// <param name="effort">Aufwandsstufe der CLI (<c>low</c> … <c>max</c>); null = Standard.</param>
+    public async Task<string> CompleteAsync(string instructions, string input, string? model, string? effort = null,
+        TimeSpan? timeout = null, CancellationToken ct = default)
     {
         var arguments = new List<string>
         {
@@ -224,6 +230,7 @@ public sealed class ClaudeCli
             "--output-format", "text",
         };
         if (!string.IsNullOrWhiteSpace(model)) { arguments.Add("--model"); arguments.Add(model.Trim()); }
+        if (effort != null) { arguments.Add("--effort"); arguments.Add(effort); }
         var output = await ExecuteAsync(arguments, input, instructions, timeout ?? DefaultTimeout, ct);
         if (output.Length == 0) throw ClaudeCliException.EmptyOutput();
         return output;

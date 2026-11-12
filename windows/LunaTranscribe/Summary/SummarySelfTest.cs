@@ -11,7 +11,7 @@ namespace LunaTranscribe.Summary;
 /// <summary>
 /// Entwickler-Einstieg für die Zusammenfassung über die Claude CLI – über denselben Code wie der Button in der App
 /// (<see cref="ClaudeCli"/>, <see cref="SummaryPrompt"/>), ohne Modelle:
-/// <code>LunaTranscribe.exe --summary-selftest [meeting.json] [--cli C:\pfad\claude.exe] [--model sonnet]</code>
+/// <code>LunaTranscribe.exe --summary-selftest [meeting.json] [--cli C:\pfad\claude.exe] [--model sonnet] [--language en]</code>
 /// Ohne Datei fasst der Test ein kurzes eingebautes Gespräch zusammen. <c>--cli</c> mit einem falschen Pfad prüft die
 /// Meldung „CLI nicht gefunden“. Achtung: Der Text geht an Anthropic.
 /// </summary>
@@ -23,6 +23,17 @@ public static class SummarySelfTest
         var file = args.FirstOrDefault() is { } first && !first.StartsWith("--") ? first : null;
         var cliPath = Value("--cli", args) ?? "";
         var model = Value("--model", args);
+        var languageCode = Value("--language", args);
+        AppLanguage? language = null;
+        if (languageCode != null)
+        {
+            language = AppLanguageExtensions.FromCode(languageCode);
+            if (language == null)
+            {
+                SelfTests.Print("Unbekannte Sprache: " + languageCode);
+                return 2;
+            }
+        }
         try
         {
             var transcript = file != null ? JsonCoding.Decode<MeetingTranscript>(File.ReadAllBytes(file)) : Sample();
@@ -31,7 +42,7 @@ public static class SummarySelfTest
             SelfTests.Print($"Meeting: {transcript.Title}, {transcript.Turns.Count} Beiträge, {transcript.WordCount} Wörter\n");
             var sw = Stopwatch.StartNew();
             var summary = await cli.CompleteAsync(
-                SummaryPrompt.Instructions(SummaryPrompt.DefaultTemplate, transcript.Language),
+                SummaryPrompt.Instructions(SummaryPrompt.DefaultTemplate, language ?? transcript.Language),
                 transcript.Render(MeetingTranscript.ExportFormat.Text), model);
             SelfTests.Print(summary);
             SelfTests.Print($"\n({sw.Elapsed.TotalSeconds:0.0} s)");

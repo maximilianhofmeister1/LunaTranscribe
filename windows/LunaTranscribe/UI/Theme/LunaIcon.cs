@@ -16,7 +16,7 @@ public enum IconKind
     People, Book, History, Sliders, Mic, Stop, Close, Gear, Window, Copy, Search, Folder, Refresh, Trash, Share,
     Calendar, Clock, TextLines, Cpu, Lock, Unlock, Pencil, Keyboard, CheckCircle, Warning, ErrorCircle, Cloud,
     Record, Hourglass, ChevronDown, ChevronUp, ChevronRight, Plus, Minus, Check, Drive, Power, Speaker, Shield,
-    Globe, Link, Play, Info, Download, More,
+    Globe, Link, Play, Info, Download, More, Undo,
 }
 
 /// <summary>
@@ -46,6 +46,7 @@ public sealed class LunaIcon : FrameworkElement
 
     private static readonly Dictionary<IconKind, char> Glyphs = new()
     {
+        [IconKind.Undo] = '\uE7A7',
         [IconKind.People] = '', [IconKind.Book] = '', [IconKind.History] = '',
         [IconKind.Sliders] = '', [IconKind.Mic] = '', [IconKind.Stop] = '',
         [IconKind.Close] = '', [IconKind.Gear] = '', [IconKind.Window] = '',

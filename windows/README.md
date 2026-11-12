@@ -3,11 +3,13 @@
 Lokale Diktier-App für den Windows-Infobereich (Tray). Hotkey drücken → sprechen → Text wird in die aktive App eingefügt.
 Läuft komplett offline auf der CPU (ONNX Runtime) mit **Parakeet TDT v3** oder **Cohere Transcribe**.
 Dazu ein **Meeting-Modus**: Gespräch aufnehmen (Mikrofon + Systemaudio), danach Sprecher erkennen und transkribieren.
-Ein dritter Hotkey mit **Nachbearbeitung**: Ein lokales Sprachmodell (LFM2 oder Qwen3, llama.cpp) bereinigt das Diktat –
+Ein dritter Hotkey mit **Nachbearbeitung**: Ein lokales Sprachmodell (LFM2 oder Qwen3, llama.cpp) – oder auf Wunsch
+Claude Haiku über die Claude CLI – bereinigt das Diktat –
 Rechtschreibung, Grammatik, Füllwörter, Wiederholungen, Versprecher – bevor es eingefügt wird.
 Ein **eigenes Wörterbuch** sorgt dafür, dass Namen und Fachbegriffe richtig geschrieben werden – und **lernt aus deinen
 Korrekturen**. Meetings landen als JSON in einer **Meeting-Bibliothek** in einem frei wählbaren Ordner und lassen sich auf
-Knopfdruck über die **Claude CLI zusammenfassen** (die einzige, freiwillige Ausnahme vom Local-First-Prinzip). Über den
+Knopfdruck über die **Claude CLI zusammenfassen** (neben der optionalen Claude-Haiku-Nachbearbeitung die einzige,
+freiwillige Ausnahme vom Local-First-Prinzip). Über den
 lokalen MCP-Server **luna-mcp** kann Claude die Meetings durchsuchen und lesen.
 
 Alles lebt im Infobereich; ein **Hauptfenster** (Übersicht, Meetings, Wörterbuch, Verlauf, Einstellungen) öffnest du über
@@ -128,7 +130,7 @@ Wortwiederholungen und Selbstkorrekturen raus. Was es **nicht** tut: umformulier
 Text beantworten. Die **vollständige Anweisung** ist unter Einstellungen → Nachbearbeitung editierbar (`{language}` wird
 durch die Diktatsprache ersetzt); „Auf Standard zurücksetzen“ stellt die mitgelieferte Fassung wieder her.
 
-**Sicherheitsnetz:** Schlägt die Nachbearbeitung fehl (Modell lädt noch, Fehler, Timeout 20 s, unplausible Antwort), wird
+**Sicherheitsnetz:** Schlägt die Nachbearbeitung fehl (Modell lädt noch, Fehler, Timeout 20 s bzw. 30 s bei Claude, unplausible Antwort), wird
 der Rohtext eingefügt und das Overlay sagt es. Ein Diktat geht nie verloren. Im Verlauf sind nachbearbeitete Einträge
 markiert; der Rohtext lässt sich aufklappen.
 
@@ -140,12 +142,21 @@ Diktat mit 1–2 Sätzen auf einer 4-Kern-Laptop-CPU (Ryzen 5 3500U) – schnell
 | **LFM2 1.2B** (Standard) | ~0,7 GB | ~0,8 GB | ~2–4 s | Schnellstes brauchbares Modell; verschmilzt Selbstkorrekturen gern falsch |
 | **Qwen3 1.7B** | ~1,1 GB | ~1,5 GB | ~4–8 s | Konservativ: lässt Selbstkorrekturen lieber stehen; gutes Englisch |
 | **Qwen3 4B** | ~2,5 GB | ~3 GB | ~10–20 s | Löst Selbstkorrekturen innerhalb eines Satzes; auf schwachen CPUs oft im Timeout |
+| **Claude Haiku 5.5** | – | – | ~3–5 s | **Cloud** über die lokale Claude CLI (`--model claude-haiku-5-5 --effort low`), dein Claude-Konto, kein API-Schlüssel. Das Diktat geht an Anthropic |
 
 Apple Intelligence aus der macOS-Version gibt es unter Windows nicht. Der feste Anfang des Prompts (Anweisung +
 Beispiele) wird nach dem Laden einmal vorberechnet; danach rechnet jedes Diktat nur noch seinen eigenen Teil.
 
+**Claude Haiku** nutzt dieselbe Claude CLI wie die Meeting-Zusammenfassung (Pfad: Einstellungen → Meetings) – ohne
+Werkzeuge, MCP-Server, Projekteinstellungen oder gespeicherte Sitzung, mit niedrigem Aufwand. Die Modell-ID ist bewusst
+explizit (ältere CLIs lösen den Alias `haiku` noch auf Haiku 4.5 auf, das deutlich langsamer ist). Die CLI startet bei
+jedem Diktat neu, deshalb dauert es länger als die Rechenzeit von Haiku – auf schwachen CPUs aber oft weniger als Qwen3.
+Ist sie nicht angemeldet, sagt das Overlay „Claude CLI nicht angemeldet“ und fügt den Rohtext ein – dann im Terminal
+einmal `claude` starten und anmelden.
+
 ```powershell
 LunaTranscribe.exe --refine-selftest "ähm also ich wollte sagen dass dass wir morgen um elf uhr das meeting haben" --model lfm2_1_2b --language de
+LunaTranscribe.exe --refine-selftest "…" --model claudeHaiku     # Achtung: Text geht an Anthropic
 ```
 
 ## Eigenes Wörterbuch
@@ -186,8 +197,16 @@ oben auf der Seite Meetings):
 3. Das Meeting wird in der **Meeting-Bibliothek** gespeichert; eine **Windows-Mitteilung** meldet es, ein Klick öffnet es.
 
 Die Warteschlange liegt unter `%LOCALAPPDATA%\LunaTranscribe\Queue`. **Beendest du die App mit wartenden Meetings, geht
-es beim nächsten Start weiter.** Auch eine Aufnahme, die beim Absturz noch lief, wird beim nächsten Start gerettet und
-eingereiht. Schlägt eine Verarbeitung fehl, bleibt die Aufnahme erhalten: „Erneut versuchen“ oder „Verwerfen“.
+es beim nächsten Start weiter.** Schlägt eine Verarbeitung fehl, bleibt die Aufnahme erhalten: „Erneut versuchen“ oder
+„Verwerfen“.
+
+**Absturzsicher:** Die Aufnahme liegt ab der ersten Sekunde als Entwurf in der Warteschlange (`job.json` mit Phase
+`recording` + `audio.wav`, gesichert durch eine exklusiv geöffnete Sperrdatei); der WAV-Kopf wird alle 2 s nachgetragen
+und die Datei auf die Platte geschrieben. Abmelden, Herunterfahren, Energiesparmodus und Beenden der App beenden ein
+laufendes Meeting regulär und reihen es ein. Stürzt die App ab oder geht der Strom weg, repariert der nächste Start die
+WAV und zeigt die Aufnahme als **„Unterbrochene Aufnahme“** (Popover, Seite Meetings, Hinweis in der Seitenleiste, eine
+Mitteilung) mit „Transkription starten“ oder „Verwerfen“ – verarbeitet wird sie nie automatisch. Entwürfe unter 1 s
+werden still verworfen; lose WAVs der alten Ablage (`Recordings`, bis 1.1.0) werden ebenso übernommen.
 
 **Teilnehmerzahl** (Popover, Standard „automatisch“, bis zum Beenden änderbar) zwingt die Aufteilung auf genau diese
 Zahl – hilfreich bei ähnlichen Stimmen. Richtwerte auf einer 4-Kern-Laptop-CPU: Sprecher-Erkennung ≈ 0,1× Echtzeit,
@@ -223,12 +242,18 @@ Aufgaben und offene Fragen im Tab „Zusammenfassung“ und als `summary.md` ab.
 - **Voraussetzung**: Claude CLI installiert und angemeldet (einmal `claude` starten und anmelden). Die App sucht sie in
   `%USERPROFILE%\.local\bin`, bei npm (`%APPDATA%\npm`), unter Programme und im PATH; ein eigener Pfad und ein Modell
   (z. B. `sonnet`) lassen sich unter Einstellungen → Meetings setzen, „Testen“ prüft Pfad und Version.
+- **Sprache**: Neben „Zusammenfassen“ wählbar, vorbelegt mit der Sprache einer vorhandenen Zusammenfassung, sonst mit
+  dem Standard unter Einstellungen → Meetings → „Sprache“ („Wie das Meeting“ oder fest). Auch die Überschriften kommen in
+  dieser Sprache; luna-mcp nutzt denselben Standard für den Prompt `meeting_summary`.
+- **Bearbeiten**: Im Tab „Zusammenfassung“ mit „Bearbeiten“ (Strg+E) als Markdown umschreiben, „Sichern“ (Strg+S) oder
+  „Abbrechen“ (Esc). Gespeichert wird in `meeting.json` und `summary.md`; „Neu zusammenfassen“ fragt vorher, ob die
+  bearbeitete Fassung ersetzt werden soll. Themen erscheinen als fette Punkte mit eingerückten Unterpunkten.
 - **Anweisung**: Einstellungen → Meetings → „Anweisung für die Zusammenfassung“, frei editierbar.
 - **Local-First bleibt ehrlich**: Für die Zusammenfassung geht der Text des Meetings über dein Claude-Konto an Anthropic.
   Beim ersten Mal erklärt ein Hinweis das. Vertrauliche Meetings (Schloss-Knopf) werden nie geschickt.
 
 ```powershell
-LunaTranscribe.exe --summary-selftest "<Meeting-Ordner>\meeting.json" [--model sonnet] [--cli <pfad\zu\claude.exe>]
+LunaTranscribe.exe --summary-selftest "<Meeting-Ordner>\meeting.json" [--model sonnet] [--language en] [--cli <pfad\zu\claude.exe>]
 ```
 
 ## Meetings in Claude (MCP)
@@ -288,9 +313,10 @@ liefert im App-Ordner eine andere `onnxruntime.dll` (1.28). Im Unterordner `mcp\
 ## Datenschutz
 
 - Diktat-Audio bleibt nur im RAM (16 kHz mono ≈ 4 MB/min) und wird direkt nach der Transkription verworfen.
-- Meeting-Audio liegt während der Aufnahme unter `%LOCALAPPDATA%\LunaTranscribe\Recordings`, danach in der Warteschlange,
+- Meeting-Audio liegt während Aufnahme und Verarbeitung in der Warteschlange (`%LOCALAPPDATA%\LunaTranscribe\Queue`)
   und wird nach dem Speichern gelöscht – außer „Aufnahme behalten“ ist aktiv, dann wandert die WAV in den Meeting-Ordner.
-- Der Rohtext eines Diktats mit Nachbearbeitung geht nur in das lokale Sprachmodell auf diesem PC.
+- Der Rohtext eines Diktats mit Nachbearbeitung geht nur in das lokale Sprachmodell auf diesem PC – außer du wählst
+  Claude Haiku, dann geht er über die Claude CLI an Anthropic.
 - Keine Analytics, kein Account. Netzwerk nur für die einmaligen Modell-Downloads (ASR, Sprecher, Sprachmodell, optional
   Embedding-Modell) – und, **nur auf Klick**, für eine Meeting-Zusammenfassung über die Claude CLI. Was Claude über
   luna-mcp liest, siehe oben – nur nach Freigabe.
@@ -310,10 +336,11 @@ liefert im App-Ordner eine andere `onnxruntime.dll` (1.28). Im Unterordner `mcp\
   der Taste (nötig für „Gedrückt halten“) und verschluckt die Hotkey-Taste. Escape wird nur beobachtet.
 - **Systemaudio** per WASAPI-Loopback statt Core-Audio-Prozess-Tap – ohne Berechtigungsdialog.
 - **Sprechererkennung** mit sherpa-onnx (pyannote 3.0 + CAM++) und eigener Nachclusterung statt FluidAudio (pyannote community-1).
-- **Nachbearbeitung** mit llama.cpp (GGUF, CPU) statt MLX (GPU); kein Apple Intelligence.
+- **Nachbearbeitung** mit llama.cpp (GGUF, CPU) statt MLX (GPU); kein Apple Intelligence. Claude Haiku wie unter macOS.
 - **Kein akustisches Wörterbuch-Boosting** (nur Varianten ersetzen).
 - **Modelle nach Inaktivität entladen** (ASR und Sprachmodell) – nur unter Windows.
-- **Abgebrochene Meeting-Aufnahmen** (Absturz) werden beim nächsten Start gerettet statt gelöscht.
+- **Sperre laufender Aufnahmen** über eine exklusiv geöffnete Datei statt `flock`; Systemereignisse über
+  `SystemEvents.SessionEnding`/`PowerModeChanged` statt `NSWorkspace`.
 - **Medien pausieren** über die WinRT-API `GlobalSystemMediaTransportControlsSessionManager` – kein
   gebündelter Adapter nötig.
 - **Overlay**: WPF-Fenster mit `WS_EX_NOACTIVATE` (nimmt nie den Fokus), unten mittig auf dem Bildschirm
@@ -338,6 +365,7 @@ LunaTranscribe.exe --refine-selftest "<Text>" --model lfm2_1_2b --language de
 LunaTranscribe.exe --diarize-selftest dialog.wav [--speakers 2]    # Sprecher + Transkript einer Datei
 LunaTranscribe.exe --meeting-selftest 20                           # 20 s Mikrofon + Systemaudio aufnehmen und verarbeiten
 LunaTranscribe.exe --queue-selftest a.wav b.wav [--fake]           # Hintergrund-Verarbeitung, Neustart, Verwerfen
+LunaTranscribe.exe --recovery-selftest                             # Rettung abgebrochener Aufnahmen (ohne Mikrofon)
 LunaTranscribe.exe --summary-selftest meeting.json                 # Achtung: Text geht an Anthropic
 LunaTranscribe.exe --make-icon LunaTranscribe.ico [vorschau.png]   # App-Icon aus dem Code zeichnen
 ```

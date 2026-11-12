@@ -75,6 +75,8 @@ public sealed class SettingsStore : INotifyPropertyChanged
         public string ClaudeCliPath { get; set; } = "";
         public string ClaudeModel { get; set; } = "";
         public string SummaryPrompt { get; set; } = "";
+        /// <summary>„meeting“ oder Sprachcode – Schlüssel auch in LunaCore.SharedSettings.Key (luna-mcp).</summary>
+        public string SummaryLanguage { get; set; } = "meeting";
         public bool SummaryCloudNoticeAccepted { get; set; }
 
         // Nachbearbeitung
@@ -250,6 +252,16 @@ public sealed class SettingsStore : INotifyPropertyChanged
     }
 
     public bool SummaryPromptIsDefault => string.IsNullOrWhiteSpace(_d.SummaryPrompt);
+
+    /// <summary>
+    /// Standardsprache der Zusammenfassung; im Meeting für die nächste Zusammenfassung änderbar. Auch in
+    /// <see cref="SharedSettings"/> (luna-mcp, Prompt <c>meeting_summary</c>).
+    /// </summary>
+    public SummaryLanguage SummaryLanguage
+    {
+        get => SummaryLanguage.FromRawValue(_d.SummaryLanguage) ?? SummaryLanguage.Meeting;
+        set => Set(_d.SummaryLanguage, value.RawValue, v => _d.SummaryLanguage = v);
+    }
 
     public bool SummaryCloudNoticeAccepted { get => _d.SummaryCloudNoticeAccepted; set => Set(_d.SummaryCloudNoticeAccepted, value, v => _d.SummaryCloudNoticeAccepted = v); }
 

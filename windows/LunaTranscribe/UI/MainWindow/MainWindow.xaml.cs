@@ -101,6 +101,9 @@ public partial class MainWindow : Window
         var pending = _state.MeetingsPending;
         QueueLine.Visibility = pending > 0 ? Visibility.Visible : Visibility.Collapsed;
         QueueText.Text = pending == 1 ? "1 Meeting in Verarbeitung" : $"{pending} Meetings in Verarbeitung";
+        var interrupted = _state.MeetingsInterrupted;
+        InterruptedLine.Visibility = interrupted > 0 ? Visibility.Visible : Visibility.Collapsed;
+        InterruptedText.Text = interrupted == 1 ? "1 unterbrochene Aufnahme" : $"{interrupted} unterbrochene Aufnahmen";
     }
 
     // MARK: Titelleiste

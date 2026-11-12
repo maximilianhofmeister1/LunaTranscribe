@@ -214,6 +214,24 @@ public class ReadTests
         Assert.Contains("fehlgeschlagen: Modell nicht geladen", result.Text);
         Assert.Contains("Zuletzt fertig", result.Text);
         Assert.Contains("Suchindex", result.Text);
+
+        // Laufende Aufnahme (Sperre gehalten) und eine, deren Prozess nicht mehr lebt.
+        RecordingLock? held = null;
+        foreach (var active in new[] { true, false })
+        {
+            var draft = new MeetingJob(Samples.Date.AddSeconds(active ? 60 : 120), 0, AppLanguage.German, null, phase: MeetingJobPhase.Recording);
+            var draftFolder = MeetingJob.Folder(draft.Id, harness.Environment.QueueFolder);
+            Directory.CreateDirectory(draftFolder);
+            draft.Write(harness.Environment.QueueFolder);
+            File.WriteAllBytes(Path.Combine(draftFolder, MeetingJob.AudioFileName), Array.Empty<byte>());
+            if (active) held = RecordingLock.Acquire(Path.Combine(draftFolder, MeetingJob.LockFileName));
+        }
+        Assert.NotNull(held);
+        var withDrafts = await client.CallAsync("get_processing_status");
+        Assert.Contains("3 Meeting(s) in der Warteschlange", withDrafts.Text);
+        Assert.Contains("Aufnahme läuft gerade", withDrafts.Text);
+        Assert.Contains("rettet sie beim nächsten Start", withDrafts.Text);
+        held!.Release();
     }
 }
 
@@ -446,6 +464,13 @@ public class ResourcePromptTests
         var instructions = Assert.IsType<TextContentBlock>(summary.Messages[^1].Content).Text;
         Assert.Contains("## Kurzfassung", instructions);
         Assert.Contains("auf Deutsch", instructions);
+
+        // Die Standardsprache aus den App-Einstellungen gilt auch hier.
+        harness.Settings = harness.Settings with { SummaryLanguage = SummaryLanguage.Of(AppLanguage.English) };
+        var english = await client.GetPromptAsync("meeting_summary", new Dictionary<string, object?> { ["id"] = MeetingLibrary.ShortID(Samples.Planning.Id) });
+        var englishInstructions = Assert.IsType<TextContentBlock>(english.Messages[^1].Content).Text;
+        Assert.Contains("auf Englisch", englishInstructions);
+        Assert.DoesNotContain("auf Deutsch", englishInstructions);
 
         var week = await client.GetPromptAsync("weekly_review", new Dictionary<string, object?> { ["week"] = "2026-W39" });
         var text = Assert.IsType<TextContentBlock>(week.Messages[0].Content).Text;

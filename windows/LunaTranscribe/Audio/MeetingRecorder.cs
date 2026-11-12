@@ -27,8 +27,11 @@ public sealed class MeetingRecorder : IDisposable
 
     /// <summary>Puffergröße der WASAPI-Clients: groß und gepollt statt ereignisgesteuert = wenig CPU.</summary>
     private const int CaptureBufferMs = 100;
-    /// <summary>Alle so viele Sekunden wird der WAV-Header aktualisiert – nach einem Absturz bleibt die Datei lesbar.</summary>
-    private const double HeaderUpdateSeconds = 5;
+    /// <summary>
+    /// Alle so viele Sekunden wird der WAV-Header aktualisiert und die Datei auf die Platte geschrieben – nach einem
+    /// Absturz oder Stromausfall fehlen höchstens diese Sekunden (<c>RecordingRecovery</c> repariert den Rest).
+    /// </summary>
+    private const double HeaderUpdateSeconds = 2;
 
     private readonly object _lock = new();
     private WasapiCapture? _mic;
@@ -39,6 +42,9 @@ public sealed class MeetingRecorder : IDisposable
     private SourceConverter? _systemConverter;
     private SystemAudioBuffer? _systemBuffer;
     private WaveFileWriter? _writer;
+    private FileStream? _file;
+    /// <summary>1, solange ein FlushFileBuffers im Hintergrund läuft (nie zwei gleichzeitig).</summary>
+    private int _syncRunning;
     private float[] _mix = new float[4096];
     private float[] _sys = new float[4096];
     private long _frames;
@@ -103,10 +109,13 @@ public sealed class MeetingRecorder : IDisposable
         }
 
         WaveFileWriter writer;
+        FileStream file;
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
-            writer = new WaveFileWriter(outputPath, new WaveFormat(SampleRate, 16, 1));
+            // Eigener Stream, damit das Handle für FlushFileBuffers zugänglich ist.
+            file = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.Read);
+            writer = new WaveFileWriter(file, new WaveFormat(SampleRate, 16, 1));
         }
         catch (Exception ex)
         {
@@ -119,6 +128,7 @@ public sealed class MeetingRecorder : IDisposable
             _frames = 0;
             _lastHeaderUpdate = 0;
             _writer = writer;
+            _file = file;
             _micConverter = micConverter;
             _systemBuffer = new SystemAudioBuffer();
         }
@@ -143,7 +153,7 @@ public sealed class MeetingRecorder : IDisposable
             mic.RecordingStopped -= OnMicStopped;
             mic.Dispose(); device.Dispose();
             StopLoopback();
-            lock (_lock) { _writer?.Dispose(); _writer = null; }
+            lock (_lock) { _writer?.Dispose(); _writer = null; _file?.Dispose(); _file = null; }
             TryDelete(outputPath);
             throw Translate(ex);
         }
@@ -179,6 +189,8 @@ public sealed class MeetingRecorder : IDisposable
             }
             _writer?.Dispose();   // schreibt den endgültigen Header
             _writer = null;
+            _file?.Dispose();
+            _file = null;
             _micConverter = null;
         }
         Level = 0; MicLevel = 0;
@@ -319,9 +331,33 @@ public sealed class MeetingRecorder : IDisposable
         if (_frames - _lastHeaderUpdate >= HeaderUpdateSeconds * SampleRate)
         {
             _lastHeaderUpdate = _frames;
-            try { _writer.Flush(); } catch (Exception ex) { Log.Write("meeting wav flush failed: " + ex.Message); }
+            try
+            {
+                _writer.Flush();   // Kopfgrößen + Puffer an Windows
+                SyncToDiskInBackground();
+            }
+            catch (Exception ex) { Log.Write("meeting wav flush failed: " + ex.Message); }
         }
     }
+
+    /// <summary>
+    /// Schreibt den Dateicache auf die Platte (FlushFileBuffers) – nicht im Capture-Thread, weil das je nach Datenträger
+    /// mehrere 10 ms dauern kann. Das SafeHandle bleibt während des Aufrufs gültig, auch wenn Stop die Datei schließt.
+    /// </summary>
+    private void SyncToDiskInBackground()
+    {
+        if (_file is not { } file || Interlocked.Exchange(ref _syncRunning, 1) == 1) return;
+        var handle = file.SafeFileHandle;
+        _ = System.Threading.Tasks.Task.Run(() =>
+        {
+            try { if (!handle.IsClosed) FlushFileBuffers(handle); }
+            catch (Exception) { /* Datei inzwischen geschlossen – Stop hat den endgültigen Kopf geschrieben */ }
+            finally { Interlocked.Exchange(ref _syncRunning, 0); }
+        });
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool FlushFileBuffers(Microsoft.Win32.SafeHandles.SafeFileHandle handle);
 
     private void OnMicStopped(object? sender, StoppedEventArgs e)
     {

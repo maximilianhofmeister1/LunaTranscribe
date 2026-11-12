@@ -43,6 +43,9 @@ public sealed class RefinerManager : INotifyPropertyChanged
     /// <summary>Wird vor dem Entladen gefragt; false = gerade beschäftigt (Aufnahme mit Nachbearbeitung), später erneut versuchen.</summary>
     public Func<bool>? CanUnload { get; set; }
 
+    /// <summary>Eingestellter Pfad zur Claude CLI für <see cref="RefinerKind.ClaudeHaiku"/>; null/"" = automatisch suchen.</summary>
+    public Func<string?> ClaudeCliPath { get; set; } = () => null;
+
     public RefinerManager(Dispatcher dispatcher)
     {
         _dispatcher = dispatcher;
@@ -80,6 +83,7 @@ public sealed class RefinerManager : INotifyPropertyChanged
     {
         ModelStateKind.Idle => "Kein Sprachmodell geladen",
         ModelStateKind.Unloaded => "Bereit – Sprachmodell wird bei Bedarf geladen",
+        ModelStateKind.Loading when State.Refiner is { } k && k.IsCloud() => "Claude CLI wird gesucht…",
         ModelStateKind.Loading when State.Progress < 0.9 && !FilesPresent => $"Sprachmodell wird geladen… {(int)(State.Progress / 0.9 * 100)} %",
         ModelStateKind.Loading when State.Progress < 0.95 => "Sprachmodell wird initialisiert…",
         ModelStateKind.Loading => "Sprachmodell wird aufgewärmt…",
@@ -124,7 +128,7 @@ public sealed class RefinerManager : INotifyPropertyChanged
         if (_refiner == null || _refiner.Kind != kind)
         {
             _refiner?.Dispose();
-            _refiner = new LlamaRefiner(kind);
+            _refiner = kind.IsCloud() ? new ClaudeRefiner(ClaudeCliPath) : new LlamaRefiner(kind);
         }
         var refiner = _refiner;
         State = new RefinerState(ModelStateKind.Loading, 0, kind);
@@ -199,6 +203,12 @@ public sealed class RefinerManager : INotifyPropertyChanged
         {
             return RefineResult.Fallback(rawText, RefineOutcome.Cancelled, null, sw.Elapsed);
         }
+        catch (RefinerException ex) when (ex.Outcome == RefineOutcome.Unavailable)
+        {
+            // Z. B. Claude CLI nicht angemeldet – der Grund hilft mehr als ein allgemeiner Hinweis.
+            Log.Write($"refine unavailable: {ex.Message}");
+            return RefineResult.Fallback(rawText, ex.Outcome, $"{ex.Message} – Rohtext eingefügt.", sw.Elapsed);
+        }
         catch (RefinerException ex)
         {
             Log.Write($"refine failed ({ex.Outcome}): {ex.Message}");
@@ -221,6 +231,7 @@ public sealed class RefinerManager : INotifyPropertyChanged
         RefineOutcome.NotReady => "Sprachmodell lädt noch – Rohtext eingefügt.",
         RefineOutcome.Timeout => "Nachbearbeitung hat zu lange gedauert – Rohtext eingefügt.",
         RefineOutcome.Implausible => "Keine brauchbare Antwort vom Sprachmodell – Rohtext eingefügt.",
+        RefineOutcome.Unavailable => "Sprachmodell nicht verfügbar – Rohtext eingefügt.",
         _ => "Nachbearbeitung fehlgeschlagen – Rohtext eingefügt.",
     };
 
@@ -266,6 +277,7 @@ public sealed class RefinerManager : INotifyPropertyChanged
     private static string Describe(Exception ex)
     {
         var msg = ex.Message;
+        if (ex is RefinerException) return msg;
         if (ex is System.Net.Http.HttpRequestException) return "Download fehlgeschlagen – keine Internetverbindung? (" + msg + ")";
         if (ex is LLama.Exceptions.LoadWeightsFailedException) return "Sprachmodell konnte nicht geladen werden (Datei beschädigt?).";
         if (msg.Length > 200) msg = msg[..200] + "…";

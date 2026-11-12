@@ -7,8 +7,20 @@ Guidance for Claude Code when working in this repository.
 LunaTranscribe for Windows: the Windows port of the macOS app (github.com/maximilianhofmeister1/LunaTranscribe,
 Swift/SwiftUI). Same features, same structure, same design („Mondnacht“). Tray dictation app (hotkey → record →
 local transcription with Parakeet TDT v3 / Cohere Transcribe via sherpa-onnx → paste into the active app), plus
-meeting mode, refine hotkey (local LLM), custom + learning vocabulary, meeting library with Claude CLI summaries,
+meeting mode, refine hotkey (local LLM via llama.cpp, or opt-in Claude Haiku 5.5 via the Claude CLI: `ClaudeRefiner`,
+`--model claude-haiku-5-5 --effort low`, 30 s timeout, „not logged in“ → `RefineOutcome.Unavailable` with the reason in the
+overlay), custom + learning vocabulary, meeting library with Claude CLI summaries (editable, per-meeting language via
+`SummaryLanguage`, default in settings key `SummaryLanguage` shared with luna-mcp; rendered via `LunaCore.MarkdownBlock`
+with nested list depth),
 main window (Übersicht, Meetings, Wörterbuch, Verlauf, Einstellungen) and the local MCP server `luna-mcp`.
+
+Crash-safe meeting recordings (as on macOS): `MeetingProcessingQueue.BeginRecording` creates the queue job
+(`MeetingJob.Phase = Recording`, `recording.lock` held via `LunaCore.RecordingLock`, an exclusively opened file) and the
+recorder writes straight into `Queue\<id>\audio.wav` (NAudio header + FlushFileBuffers every 2 s). `FinishRecording` /
+`DiscardRecording` end it; session end, suspend and app exit stop a running meeting regularly. At start
+`LunaCore.RecordingRecovery` repairs orphaned drafts (`WavHeader.Repair`) and marks them `Interrupted` – never processed
+automatically („Transkription starten“ = `Retry`). luna-mcp `get_processing_status` reports `state`. Check with
+`--recovery-selftest`.
 
 Windows-only additions that the macOS version does not have (keep them): the model is unloaded after N minutes
 without dictation (`Settings.UnloadAfterMinutes`, `ModelManager.UnloadAfter`) and reloaded in parallel to the next

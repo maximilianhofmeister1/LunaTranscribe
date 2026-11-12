@@ -64,6 +64,7 @@ public partial class App : Application
         _tray = new TrayIcon(_state, QuitFromTray);
         _state.ShowMainWindow = ShowMainWindow;
         _state.Notifier.Presenter = _tray.ShowNotification;
+        _state.AnnounceRecoveredRecordings();
     }
 
     /// <summary>Hauptfenster öffnen bzw. nach vorne holen. Die App bleibt eine Infobereich-App: Schließen beendet sie nicht.</summary>
