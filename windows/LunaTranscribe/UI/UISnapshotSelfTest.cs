@@ -64,6 +64,7 @@ public static class UISnapshotSelfTest
             settings.KeepHistory = savedKeepHistory;
             AppPaths.DataDirectoryOverride = null;
             MeetingDetailView.StartOnSummaryTab = false;
+            MeetingDetailView.StartEditingSummary = false;
             LunaTheme.Apply(app.Resources, LunaTheme.SystemUsesDarkMode());
             try { Directory.Delete(temp, recursive: true); } catch { }
         }
@@ -107,6 +108,11 @@ public static class UISnapshotSelfTest
                     state.Router.Page = MainPage.Overview;
                     state.Router.Page = MainPage.Meetings;
                     await Save(win, Path.Combine(dir, $"{mode}-meetings-zusammenfassung.png"));
+                    MeetingDetailView.StartEditingSummary = true;
+                    state.Router.Page = MainPage.Overview;
+                    state.Router.Page = MainPage.Meetings;
+                    await Save(win, Path.Combine(dir, $"{mode}-meetings-zusammenfassung-bearbeiten.png"));
+                    MeetingDetailView.StartEditingSummary = false;
                     MeetingDetailView.StartOnSummaryTab = false;
                 }
             }
@@ -160,12 +166,19 @@ public static class UISnapshotSelfTest
                 "## Kurzfassung",
                 "Der Launch der neuen Version wird auf **Montag** verschoben, weil die Tests noch laufen.",
                 "",
+                "## Themen",
+                "- **Launch-Termin**",
+                "  - Tests laufen noch, deshalb Montag statt Freitag",
+                "    - Testbericht kommt bis Freitag",
+                "- **weclapp-Export**",
+                "  - Markus hängt ihn an den Testbericht",
+                "",
                 "## Entscheidungen",
                 "- Launch am Montag",
                 "",
                 "## Aufgaben",
                 "- [ ] Markus: Testbericht und weclapp-Export schicken (Freitag)",
-                "- [x] Anna: Termin im Kalender verschieben"), DateTime.UtcNow, "sonnet"),
+                "- [x] Anna: Termin im Kalender verschieben"), DateTime.UtcNow.AddMinutes(-30), "sonnet", AppLanguage.German, DateTime.UtcNow),
         };
 
         var standup = new MeetingTranscript(DateTime.UtcNow.AddDays(-2), 912, EngineKind.Parakeet, AppLanguage.German,
@@ -188,6 +201,13 @@ public static class UISnapshotSelfTest
         var wav = Path.Combine(temp, "stille.wav");
         WavReader.WriteMono16k(wav, new float[16_000]);
         state.MeetingQueue.Enqueue(wav, DateTime.UtcNow.AddMinutes(-5), 1834, AppLanguage.German, 0);
+
+        // Eine beim „letzten Lauf“ abgebrochene Aufnahme: Entwurf ohne Sperre → wird als unterbrochen gerettet.
+        var draft = new MeetingJob(DateTime.UtcNow.AddHours(-3), 0, AppLanguage.German, null, phase: MeetingJobPhase.Recording);
+        Directory.CreateDirectory(MeetingJob.Folder(draft.Id, state.MeetingQueue.Folder));
+        draft.Write(state.MeetingQueue.Folder);
+        WavReader.WriteMono16k(Path.Combine(MeetingJob.Folder(draft.Id, state.MeetingQueue.Folder), MeetingJob.AudioFileName), new float[16_000 * 3]);
+        state.MeetingQueue.RecoverInterruptedRecordings();
     }
 
     private static async Task Save(FrameworkElement element, string path)

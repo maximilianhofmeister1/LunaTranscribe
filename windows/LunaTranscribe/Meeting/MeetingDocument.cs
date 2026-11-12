@@ -128,6 +128,21 @@ public sealed class MeetingDocument : INotifyPropertyChanged, IDisposable
         LearnedSuggestions = changed;
     }
 
+    /// <summary>
+    /// Übernimmt den vom Nutzer bearbeiteten Text der Zusammenfassung und speichert sofort – das Bearbeiten ist ein
+    /// bewusster Schritt mit „Sichern“, keine laufende Eingabe. Leerer Text wird ignoriert (Löschen ist keine
+    /// Bearbeitung); unveränderter Text markiert nichts als bearbeitet.
+    /// </summary>
+    public void ReviseSummary(string markdown)
+    {
+        if (_transcript.Summary is not { } summary || string.IsNullOrWhiteSpace(markdown)) return;
+        var revised = summary.Revised(markdown);
+        if (ReferenceEquals(revised, summary)) return;
+        _transcript.Summary = revised;
+        Changed();
+        Flush();
+    }
+
     /// <summary>Sofort speichern (z. B. beim Schließen, Wechseln oder vor dem Zusammenfassen).</summary>
     public void Flush()
     {

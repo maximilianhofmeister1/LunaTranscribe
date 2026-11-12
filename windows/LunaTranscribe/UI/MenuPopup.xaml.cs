@@ -344,7 +344,7 @@ public partial class MenuPopup : Window
         }
 
         _meetingQueue.Visibility = _state.MeetingQueue.Items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        _queueHint.Visibility = _state.Models.IsReady ? Visibility.Collapsed : Visibility.Visible;
+        _queueHint.Visibility = !_state.Models.IsReady && _state.MeetingQueue.PendingCount > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void RefreshHistory()

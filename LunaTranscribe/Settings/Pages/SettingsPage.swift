@@ -85,7 +85,7 @@ struct PromptEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             TextEditor(text: $text)
-                .font(.system(size: 12, design: .monospaced))
+                .font(LunaFont.mono(12))
                 .scrollContentBackground(.hidden)
                 .padding(8)
                 .frame(minHeight: 160, maxHeight: 320)

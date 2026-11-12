@@ -209,15 +209,35 @@ public static class ExportFormatExtensions
 public sealed record MeetingSummary
 {
     [JsonPropertyName("markdown"), JsonRequired] public string Markdown { get; init; } = "";
+    /// <summary>Zeitpunkt, zu dem Claude die Zusammenfassung erstellt hat (bleibt beim Bearbeiten erhalten).</summary>
     [JsonPropertyName("createdAt"), JsonRequired] public DateTime CreatedAt { get; init; }
     /// <summary>Modell, das in den Einstellungen gewählt war; null = Standard der CLI.</summary>
     [JsonPropertyName("model")] public string? Model { get; init; }
+    /// <summary>Sprache, in der Claude geschrieben hat; null bei Zusammenfassungen vor Version 1.2.</summary>
+    [JsonPropertyName("language")] public AppLanguage? Language { get; init; }
+    /// <summary>Letzte Bearbeitung durch den Nutzer; null = unverändert, wie Claude sie geschrieben hat.</summary>
+    [JsonPropertyName("editedAt")] public DateTime? EditedAt { get; init; }
 
-    public MeetingSummary(string markdown, DateTime createdAt, string? model = null)
+    public MeetingSummary(string markdown, DateTime createdAt, string? model = null, AppLanguage? language = null, DateTime? editedAt = null)
     {
         Markdown = markdown;
         CreatedAt = createdAt;
         Model = model;
+        Language = language;
+        EditedAt = editedAt;
+    }
+
+    [JsonIgnore] public bool IsEdited => EditedAt != null;
+
+    /// <summary>
+    /// Dieselbe Zusammenfassung mit neuem Text. Leerraum am Rand wird entfernt; ein unveränderter Text gilt nicht als
+    /// Bearbeitung, damit „Sichern“ ohne Änderung nichts markiert.
+    /// </summary>
+    public MeetingSummary Revised(string markdown, DateTime? at = null)
+    {
+        var cleaned = markdown.Replace("\r\n", "\n").Trim();
+        if (cleaned == Markdown.Replace("\r\n", "\n").Trim()) return this;
+        return this with { Markdown = cleaned, EditedAt = at ?? DateTime.UtcNow };
     }
 
     [JsonConstructor]

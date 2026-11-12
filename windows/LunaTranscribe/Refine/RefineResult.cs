@@ -9,7 +9,8 @@ public enum RefineOutcome
     Skipped,        // leerer Text – nichts zu tun
     NotReady,       // Sprachmodell lädt noch (oder wird heruntergeladen)
     Failed,         // Modell konnte nicht geladen werden oder Fehler bei der Generierung
-    Timeout,        // länger als LlamaRefiner.Timeout
+    Timeout,        // länger als LlamaRefiner.Timeout bzw. ClaudeRefiner.Timeout
+    Unavailable,    // Backend nicht nutzbar (z. B. Claude CLI fehlt oder nicht angemeldet) – Grund steht im Hinweis
     Implausible,    // Antwort leer oder in der Länge unglaubwürdig
     Cancelled,      // vom Aufrufer abgebrochen (z. B. Escape) – ohne Hinweis
 }

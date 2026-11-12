@@ -82,7 +82,7 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         Interactive = interactive;
         _dispatcher = dispatcher;
         Models = new ModelManager(dispatcher);
-        Refiners = new RefinerManager(dispatcher);
+        Refiners = new RefinerManager(dispatcher) { ClaudeCliPath = () => Settings.ClaudeCliPath };
         Search = new SearchIndexer(Settings, dispatcher, interactive);
         Models.PropertyChanged += (_, e) =>
         {
@@ -154,7 +154,8 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         if (interactive)
         {
             Meetings.StartWatching();
-            Meeting.RescueOrphanedRecordings();   // Aufnahmen, die beim letzten Beenden/Absturz noch liefen
+            // Aufnahmen, die beim letzten Beenden/Absturz noch liefen, hat die Warteschlange beim Anlegen schon als
+            // „unterbrochen“ gerettet – sie warten auf den Nutzer (AnnounceRecoveredRecordings meldet sie).
             MeetingQueue.Active = true;   // wartende Meetings vom letzten Lauf weiterverarbeiten
         }
 
@@ -304,10 +305,12 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
         MeetingQueue.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(MeetingProcessingQueue.PendingCount)) OnPropertyChanged(nameof(MeetingsPending));
+            if (e.PropertyName == nameof(MeetingProcessingQueue.InterruptedCount)) OnPropertyChanged(nameof(MeetingsInterrupted));
             if (e.PropertyName == nameof(MeetingProcessingQueue.Items)) OnPropertyChanged(nameof(MeetingQueueItems));
         };
         // Fertige Meetings melden, statt ein Fenster zu öffnen – das würde mitten im nächsten Meeting stören.
         Notifier.OnOpenMeeting = OpenMeeting;
+        Notifier.OnOpenMeetings = () => OpenMainWindow(MainPage.Meetings);
         // „Rückgängig“ in den Datenschutz-Einstellungen ändert Meetings direkt in der Bibliothek → neu einlesen.
         ClaudeActivity.MeetingChanged += _ => _dispatcher.BeginInvoke(Meetings.Reload);
         MeetingQueue.Finished += (title, id) => Notifier.MeetingFinished(title, id);
@@ -319,6 +322,18 @@ public sealed class AppState : INotifyPropertyChanged, IDisposable
 
     /// <summary>Meetings in der Hintergrund-Verarbeitung (laufend oder wartend, ohne fehlgeschlagene).</summary>
     public int MeetingsPending => MeetingQueue.PendingCount;
+
+    /// <summary>Gerettete (unterbrochene) Aufnahmen, die auf „Transkription starten“ oder „Verwerfen“ warten.</summary>
+    public int MeetingsInterrupted => MeetingQueue.InterruptedCount;
+
+    /// <summary>
+    /// Beim Start gerettete Aufnahmen per Mitteilung melden – nicht verarbeiten. Aufruf, sobald der Infobereich steht
+    /// (vorher kann der Notifier nichts anzeigen).
+    /// </summary>
+    public void AnnounceRecoveredRecordings()
+    {
+        if (MeetingQueue.RecoveredAtLaunch.Count > 0) Notifier.RecordingsRecovered(MeetingQueue.RecoveredAtLaunch.Count);
+    }
 
     /// <summary>Alle Aufträge der Warteschlange (auch fehlgeschlagene) – ändert sich bei jedem Zustandswechsel.</summary>
     public int MeetingQueueItems => MeetingQueue.Items.Count;

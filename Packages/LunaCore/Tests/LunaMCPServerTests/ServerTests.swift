@@ -418,6 +418,12 @@ struct ResourcePromptTests {
         guard case .text(let instructions) = summary.messages.last?.content else { Issue.record("Keine Anweisung"); return }
         #expect(instructions.contains("## Kurzfassung") && instructions.contains("auf Deutsch"))
 
+        // Die Standardsprache aus den App-Einstellungen gilt auch hier.
+        harness.settings.summaryLanguage = .fixed(.english)
+        let english = try await client.getPrompt(name: "meeting_summary", arguments: ["id": MeetingLibrary.shortID(Samples.planning.id)])
+        guard case .text(let englishInstructions) = english.messages.last?.content else { Issue.record("Keine Anweisung"); return }
+        #expect(englishInstructions.contains("auf Englisch") && !englishInstructions.contains("auf Deutsch"))
+
         let week = try await client.getPrompt(name: "weekly_review", arguments: ["week": "2026-W39"])
         guard case .text(let text) = week.messages.first?.content else { Issue.record("Kein Text"); return }
         #expect(text.contains("vom 21.09.2026 bis 27.09.2026"))

@@ -25,6 +25,7 @@ public sealed class MeetingsPage : UserControl
     private readonly AppState _state;
     private readonly TextBox _search;
     private readonly Border _queueBox;
+    private readonly TextBlock _queueTitle;
     private readonly ContentControl _issue = new() { Focusable = false };
     private readonly StackPanel _list = new();
     private readonly ContentControl _detailHost = new() { Focusable = false };
@@ -55,7 +56,8 @@ public sealed class MeetingsPage : UserControl
         }.Brushed(Border.BackgroundProperty, "Luna.Surface").Brushed(Border.BorderBrushProperty, "Luna.Stroke");
 
         var queueStack = new VStack { Spacing = 8 };
-        queueStack.Children.Add(SmallCaps("In Verarbeitung"));
+        _queueTitle = SmallCaps("In Verarbeitung");
+        queueStack.Children.Add(_queueTitle);
         queueStack.Children.Add(new MeetingQueueView(state.MeetingQueue, compact: true));
         _queueBox = new Border { CornerRadius = new CornerRadius(10), Padding = new Thickness(10), Child = queueStack }
             .Brushed(Border.BackgroundProperty, "Luna.Surface");
@@ -151,8 +153,11 @@ public sealed class MeetingsPage : UserControl
 
     private void OnSummarizerChanged(object? sender, PropertyChangedEventArgs e) => Dispatcher.BeginInvoke(RebuildList);
 
-    private void RefreshQueue() =>
+    private void RefreshQueue()
+    {
         _queueBox.Visibility = _state.MeetingQueue.Items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        _queueTitle.Text = (_state.MeetingQueue.PendingCount > 0 ? "In Verarbeitung" : "Nicht verarbeitet").ToUpper(German);
+    }
 
     private void RefreshIssue()
     {

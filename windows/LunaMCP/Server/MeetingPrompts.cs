@@ -83,7 +83,9 @@ internal static class MeetingPrompts
             case "meeting_summary":
             {
                 var meeting = context.Snapshot.Resolve(args.RequiredString("id"));
-                var instructions = SummaryPrompt.Instructions(context.Settings.SummaryPromptTemplate, meeting.Transcript.Language);
+                // Dieselbe Standardsprache wie der Knopf „Zusammenfassen“ in der App.
+                var language = context.Settings.SummaryLanguage.Resolved(meeting.Transcript.Language);
+                var instructions = SummaryPrompt.Instructions(context.Settings.SummaryPromptTemplate, language);
                 return Embedding(meeting, context, $"Zusammenfassung von „{meeting.Transcript.Title}“", instructions);
             }
             case "weekly_review":

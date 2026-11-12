@@ -170,17 +170,40 @@ public struct MeetingTranscript: Codable, Identifiable, Equatable, Sendable {
     }
 }
 
-/// Von der Claude CLI erzeugte Zusammenfassung eines Meetings (Markdown).
+/// Von der Claude CLI erzeugte, vom Nutzer ggf. überarbeitete Zusammenfassung eines Meetings (Markdown).
+///
+/// `language` und `editedAt` sind optional, damit ältere Dateien gültig bleiben (Schema bleibt 1) –
+/// fehlen sie, werden sie auch nicht geschrieben.
 public struct MeetingSummary: Codable, Equatable, Sendable {
     public var markdown: String
+    /// Zeitpunkt, zu dem Claude die Zusammenfassung erstellt hat (bleibt beim Bearbeiten erhalten).
     public var createdAt: Date
     /// Modell, das in den Einstellungen gewählt war; nil = Standard der CLI.
     public var model: String?
+    /// Sprache, in der Claude geschrieben hat; nil bei Zusammenfassungen vor Version 1.2.
+    public var language: AppLanguage?
+    /// Letzte Bearbeitung durch den Nutzer; nil = unverändert, wie Claude sie geschrieben hat.
+    public var editedAt: Date?
 
-    public init(markdown: String, createdAt: Date, model: String? = nil) {
+    public init(markdown: String, createdAt: Date, model: String? = nil, language: AppLanguage? = nil, editedAt: Date? = nil) {
         self.markdown = markdown
         self.createdAt = createdAt
         self.model = model
+        self.language = language
+        self.editedAt = editedAt
+    }
+
+    public var isEdited: Bool { editedAt != nil }
+
+    /// Dieselbe Zusammenfassung mit neuem Text. Leerraum am Rand wird entfernt; ein unveränderter
+    /// Text gilt nicht als Bearbeitung, damit „Speichern“ ohne Änderung nichts markiert.
+    public func revised(markdown newMarkdown: String, at date: Date = Date()) -> MeetingSummary {
+        let cleaned = newMarkdown.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard cleaned != markdown.trimmingCharacters(in: .whitespacesAndNewlines) else { return self }
+        var copy = self
+        copy.markdown = cleaned
+        copy.editedAt = date
+        return copy
     }
 }
 

@@ -7,114 +7,98 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using LunaCore;
 using LunaTranscribe.UI.Theme;
 
 namespace LunaTranscribe.UI.Components;
 
 /// <summary>
-/// Zeigt das Markdown der Zusammenfassungen: Überschriften, Aufzählungen, nummerierte Listen, Aufgaben-Checkboxen
-/// und Absätze mit Inline-Formatierung (fett, kursiv, Code, Links als Text). Bewusst klein – mehr erzeugt der
-/// Zusammenfassungs-Prompt nicht (Pendant zu MarkdownView.swift).
+/// Zeigt das Markdown der Zusammenfassungen (Pendant zu MarkdownView.swift). Das Zerlegen übernimmt
+/// <see cref="MarkdownBlock.Parse"/>, hier geht es nur um die Hierarchie im Bild: Unterpunkte rücken unter ihren
+/// Oberpunkt und stehen enger beieinander als die Oberpunkte, sodass jedes Thema als Gruppe mit klarer Überschrift
+/// lesbar ist. Inline-Formatierung: fett, kursiv, Code, Links als Text.
 /// </summary>
 public sealed class MarkdownView : UserControl
 {
-    private enum Kind { Heading, Bullet, Numbered, Task, Paragraph }
-
-    private sealed record Block(Kind Kind, string Text, int Level = 0, bool Done = false, string Marker = "");
-
     private const double BodySize = 13.5;
+    private const double MarkerSize = 5;
+    private const double MarkerSpacing = 8;
+    /// <summary>Etwas mehr als Punkt + Abstand: Der Unterpunkt beginnt sichtbar rechts vom Text des Oberpunkts.</summary>
+    private const double IndentPerLevel = 16;
+    private const double SpaceBeforeHeading = 18;
+    private const double SpaceBeforeBlock = 8;
+    private const double SpaceBeforeSubitem = 4;
+    private const double SubitemMarkerOpacity = 0.55;
 
     public MarkdownView(string markdown)
     {
-        var stack = new VStack { Spacing = 8 };
+        var stack = new StackPanel();
         var first = true;
-        foreach (var block in Parse(markdown))
+        foreach (var block in MarkdownBlock.Parse(markdown))
         {
-            stack.Children.Add(View(block, first));
+            var view = View(block);
+            view.Margin = new Thickness(view.Margin.Left, first ? 0 : SpaceBefore(block), 0, 0);
+            stack.Children.Add(view);
             first = false;
         }
         Content = stack;
     }
 
-    // MARK: Blöcke
-
-    private static readonly Regex NumberedPattern = new(@"^(\d{1,3})[.)]\s+(.*)$");
-
-    private static IEnumerable<Block> Parse(string markdown)
+    private static double SpaceBefore(MarkdownBlock block) => block switch
     {
-        foreach (var raw in markdown.Replace("\r\n", "\n").Split('\n'))
+        MarkdownBlock.Heading => SpaceBeforeHeading,
+        MarkdownBlock.ListItem { Depth: > 0 } => SpaceBeforeSubitem,
+        _ => SpaceBeforeBlock,
+    };
+
+    private static FrameworkElement View(MarkdownBlock block)
+    {
+        switch (block)
         {
-            var line = raw.Trim();
-            if (line.Length == 0) continue;
-            if (line.StartsWith('#'))
+            case MarkdownBlock.Heading heading:
             {
-                var level = line.TakeWhile(c => c == '#').Count();
-                yield return new Block(Kind.Heading, line[level..].Trim(), level);
-                continue;
+                var text = Text(heading.Text, heading.Level switch { 1 => 21, 2 => 18, _ => 15 });
+                text.SetResourceReference(TextBlock.FontFamilyProperty, "Luna.Font.Title");
+                return text;
             }
-            var task = new[] { ("- [ ] ", false), ("- [x] ", true), ("- [X] ", true), ("* [ ] ", false), ("* [x] ", true) }
-                .FirstOrDefault(p => line.StartsWith(p.Item1));
-            if (task.Item1 != null)
+            case MarkdownBlock.ListItem item:
             {
-                yield return new Block(Kind.Task, line[task.Item1.Length..], Done: task.Item2);
-                continue;
+                var row = Row(Marker(item.Marker, item.Depth), Text(item.Text));
+                row.Margin = new Thickness(item.Depth * IndentPerLevel, 0, 0, 0);
+                return row;
             }
-            if (line.StartsWith("- ") || line.StartsWith("* ") || line.StartsWith("• "))
-            {
-                yield return new Block(Kind.Bullet, line[2..].Trim());
-                continue;
-            }
-            if (NumberedPattern.Match(line) is { Success: true } m)
-            {
-                yield return new Block(Kind.Numbered, m.Groups[2].Value, Marker: m.Groups[1].Value + ".");
-                continue;
-            }
-            yield return new Block(Kind.Paragraph, line);
+            case MarkdownBlock.Paragraph paragraph:
+                return Text(paragraph.Text);
+            default:
+                return new TextBlock();
         }
     }
 
-    private static FrameworkElement View(Block block, bool first)
+    private static FrameworkElement Marker(MarkdownListMarker marker, int depth)
     {
-        switch (block.Kind)
+        if (marker == MarkdownListMarker.Bullet)
         {
-            case Kind.Heading:
+            var dot = new Ellipse
             {
-                var text = Text(block.Text, block.Level <= 2 ? 18 : 15);
-                text.SetResourceReference(TextBlock.FontFamilyProperty, "Luna.Font.Title");
-                text.Margin = new Thickness(0, first ? 0 : 6, 0, 0);
-                return text;
-            }
-            case Kind.Bullet:
-            {
-                var dot = new Ellipse { Width = 5, Height = 5, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(2, 8, 0, 0) };
-                dot.SetResourceReference(Shape.FillProperty, "Luna.Lavender");
-                return Row(dot, Text(block.Text));
-            }
-            case Kind.Numbered:
-            {
-                var number = new TextBlock { Text = block.Marker, FontSize = BodySize, FontWeight = FontWeights.SemiBold, MinWidth = 16 }
-                    .Styled("Luna.TextBase").Brushed(TextBlock.ForegroundProperty, "Luna.Lavender");
-                return Row(number, Text(block.Text));
-            }
-            case Kind.Task:
-            {
-                var box = new Border
-                {
-                    Width = 13, Height = 13, CornerRadius = new CornerRadius(3.5), BorderThickness = new Thickness(1.4),
-                    VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 3, 0, 0),
-                };
-                box.SetResourceReference(Border.BorderBrushProperty, "Luna.Honey");
-                if (block.Done)
-                {
-                    box.SetResourceReference(Border.BackgroundProperty, "Luna.Honey");
-                    box.Child = new LunaIcon { Kind = IconKind.Check, Size = 9, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
-                        .Brushed(LunaIcon.ForegroundProperty, "Luna.OnAccent");
-                }
-                return Row(box, Text(block.Text));
-            }
-            default:
-                return Text(block.Text);
+                Width = MarkerSize, Height = MarkerSize, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(2, 8, 0, 0),
+                Opacity = depth == 0 ? 1 : SubitemMarkerOpacity,
+            };
+            dot.SetResourceReference(Shape.FillProperty, "Luna.Lavender");
+            return dot;
         }
+        var box = new Border
+        {
+            Width = 13, Height = 13, CornerRadius = new CornerRadius(3.5), BorderThickness = new Thickness(1.4),
+            VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 3, 0, 0),
+        };
+        box.SetResourceReference(Border.BorderBrushProperty, "Luna.Honey");
+        if (marker == MarkdownListMarker.TaskDone)
+        {
+            box.SetResourceReference(Border.BackgroundProperty, "Luna.Honey");
+            box.Child = new LunaIcon { Kind = IconKind.Check, Size = 9, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+                .Brushed(LunaIcon.ForegroundProperty, "Luna.OnAccent");
+        }
+        return box;
     }
 
     private static FrameworkElement Row(FrameworkElement marker, FrameworkElement text)
@@ -122,7 +106,7 @@ public sealed class MarkdownView : UserControl
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        marker.Margin = new Thickness(marker.Margin.Left, marker.Margin.Top, 9, 0);
+        marker.Margin = new Thickness(marker.Margin.Left, marker.Margin.Top, MarkerSpacing, 0);
         grid.Children.Add(marker);
         Grid.SetColumn(text, 1);
         grid.Children.Add(text);

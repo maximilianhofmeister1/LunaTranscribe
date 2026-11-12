@@ -24,6 +24,8 @@ public sealed record SharedSettings
         public const string VocabularyEntries = "VocabularyEntries";
         /// <summary>string, fehlend oder "" = <see cref="SummaryPrompt.DefaultTemplate"/>.</summary>
         public const string SummaryPrompt = "SummaryPrompt";
+        /// <summary>string: „meeting“ oder Sprachcode; fehlend/ungültig = wie das Meeting.</summary>
+        public const string SummaryLanguage = "SummaryLanguage";
         public const string McpAccessEnabled = "McpAccessEnabled";
         public const string McpWriteEnabled = "McpWriteEnabled";
         public const string McpConfirmRenames = "McpConfirmRenames";
@@ -40,6 +42,8 @@ public sealed record SharedSettings
     public IReadOnlyList<VocabularyEntry> VocabularyEntries { get; init; } = Array.Empty<VocabularyEntry>();
     /// <summary>Anweisung für Zusammenfassungen (die App speichert nur Abweichungen vom Standard).</summary>
     public string SummaryPromptTemplate { get; init; } = SummaryPrompt.DefaultTemplate;
+    /// <summary>Standardsprache der Zusammenfassungen. Standard: wie das Meeting.</summary>
+    public SummaryLanguage SummaryLanguage { get; init; } = SummaryLanguage.Meeting;
     /// <summary>Hauptschalter: Claude darf Meetings über luna-mcp lesen. Standard aus.</summary>
     public bool McpAccessEnabled { get; init; }
     /// <summary>Claude darf Meetings umbenennen, Sprecher benennen und (nach Bestätigung) löschen. Standard aus.</summary>
@@ -55,6 +59,7 @@ public sealed record SharedSettings
     public bool Equals(SharedSettings? other) =>
         other is not null && MeetingFolderPath == other.MeetingFolderPath && VocabularyEnabled == other.VocabularyEnabled
         && VocabularyEntries.SequenceEqual(other.VocabularyEntries) && SummaryPromptTemplate == other.SummaryPromptTemplate
+        && SummaryLanguage == other.SummaryLanguage
         && McpAccessEnabled == other.McpAccessEnabled && McpWriteEnabled == other.McpWriteEnabled
         && McpConfirmRenames == other.McpConfirmRenames && SemanticSearchEnabled == other.SemanticSearchEnabled;
 
@@ -100,6 +105,7 @@ public sealed record SharedSettings
                 VocabularyEnabled = Bool(root, Key.VocabularyEnabled, true),
                 VocabularyEntries = Entries(root),
                 SummaryPromptTemplate = prompt.Length == 0 ? SummaryPrompt.DefaultTemplate : prompt,
+                SummaryLanguage = SummaryLanguage.FromRawValue(String(root, Key.SummaryLanguage)) ?? SummaryLanguage.Meeting,
                 McpAccessEnabled = Bool(root, Key.McpAccessEnabled, false),
                 McpWriteEnabled = Bool(root, Key.McpWriteEnabled, false),
                 McpConfirmRenames = Bool(root, Key.McpConfirmRenames, false),

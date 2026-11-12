@@ -39,8 +39,9 @@ enum MeetingPrompts {
         switch name {
         case "meeting_summary":
             let meeting = try context.snapshot.resolve(try args.requiredString("id"))
-            let instructions = SummaryPrompt.instructions(template: context.settings.summaryPromptTemplate,
-                                                          language: meeting.transcript.language)
+            // Dieselbe Standardsprache wie der Knopf „Zusammenfassen“ in der App.
+            let language = context.settings.summaryLanguage.resolved(for: meeting.transcript.language)
+            let instructions = SummaryPrompt.instructions(template: context.settings.summaryPromptTemplate, language: language)
             return try await embedding(meeting, context: context, description: "Zusammenfassung von „\(meeting.transcript.title)“",
                                        instructions: instructions)
 

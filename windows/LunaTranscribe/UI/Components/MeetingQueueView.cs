@@ -12,7 +12,8 @@ namespace LunaTranscribe.UI.Components;
 
 /// <summary>
 /// Meetings in der Hintergrund-Verarbeitung: Fortschritt, Wartende, Fehlgeschlagene mit „Erneut versuchen“ /
-/// „Verwerfen“. Genutzt im Popover (kompakt) und auf der Seite Meetings. Abonniert die Warteschlange selbst,
+/// „Verwerfen“, gerettete (unterbrochene) Aufnahmen mit „Transkription starten“. Genutzt im Popover (kompakt) und auf
+/// der Seite Meetings. Abonniert die Warteschlange selbst,
 /// solange sie angezeigt wird; Fortschritt aktualisiert nur Balken und Schritt (kein Neuaufbau).
 /// </summary>
 public sealed class MeetingQueueView : UserControl
@@ -80,6 +81,7 @@ public sealed class MeetingQueueView : UserControl
         {
             QueueItemPhase.Processing => new Spinner { Width = 12, Height = 12 },
             QueueItemPhase.Waiting => new LunaIcon { Kind = IconKind.Hourglass, Size = 12 }.Brushed(LunaIcon.ForegroundProperty, "Luna.InkMuted"),
+            QueueItemPhase.Interrupted => new LunaIcon { Kind = IconKind.Undo, Size = 12 }.Brushed(LunaIcon.ForegroundProperty, "Luna.Honey"),
             _ => new LunaIcon { Kind = IconKind.Warning, Size = 12 }.Brushed(LunaIcon.ForegroundProperty, "Luna.Rose"),
         };
         icon.VerticalAlignment = VerticalAlignment.Center;
@@ -112,6 +114,18 @@ public sealed class MeetingQueueView : UserControl
             case QueueItemPhase.Waiting:
                 stack.Children.Add(Footer(Caption("Wartet auf Verarbeitung"), Small("Verwerfen", "Luna.QuietSmall", () => ConfirmDiscard(item))));
                 break;
+            case QueueItemPhase.Interrupted:
+            {
+                var message = Caption("Unterbrochene Aufnahme – LunaTranscribe wurde während des Meetings beendet. Bis dahin ist alles gesichert.");
+                message.TextWrapping = TextWrapping.Wrap;
+                message.MaxHeight = _compact ? 48 : 64;
+                stack.Children.Add(message);
+                var buttons = new HStack { Spacing = 4, Margin = new Thickness(0, 2, 0, 0) };
+                buttons.Children.Add(Small("Transkription starten", "Luna.SecondarySmall", () => _queue.Retry(item.Id)));
+                buttons.Children.Add(Small("Verwerfen", "Luna.QuietSmall", () => ConfirmDiscard(item)));
+                stack.Children.Add(buttons);
+                break;
+            }
             default:
             {
                 var message = Caption(item.Failure ?? "Unbekannter Fehler");

@@ -74,13 +74,18 @@ public sealed class MeetingSettings : SettingsSectionView
         prompt.Children.Add(new TextBlock { Text = "Anweisung für die Zusammenfassung", FontSize = 13.5 }.Styled("Luna.Text"));
         prompt.Children.Add(PromptEditor(s.SummaryPrompt, s.SummaryPromptIsDefault, v => s.SummaryPrompt = v,
             () => s.SummaryPrompt = SummaryPrompt.DefaultTemplate));
-        prompt.Children.Add(Hint("„{language}“ wird durch die Sprache des Meetings ersetzt. Das Transkript hängt die App mit Zeitstempeln und Sprechernamen an."));
+        prompt.Children.Add(Hint("„{language}“ wird durch die gewählte Sprache der Zusammenfassung ersetzt. Das Transkript hängt die App mit Zeitstempeln und Sprechernamen an."));
+
+        var languages = new[] { SummaryLanguage.Meeting }.Concat(AppLanguageSorting.SortedByDisplayName.Select(SummaryLanguage.Of));
+        var summaryLanguage = Picker(languages, s.SummaryLanguage,
+            l => l.Fixed is { } fixedLanguage ? fixedLanguage.DisplayName() : "Wie das Meeting", v => s.SummaryLanguage = v, 220);
 
         root.Children.Add(Card("Zusammenfassung mit Claude", IconKind.Sparkles,
             CloudNote(),
             Row("Claude CLI", @"Leer = automatisch suchen (.local\bin im Benutzerordner, npm, Programme, PATH).", cliPath, test),
             _cliCheck != null ? CheckResult() : null,
             Row("Modell", "Alias wie „sonnet“ oder „opus“; leer = Standard der CLI.", model),
+            Row("Sprache", "Standard für neue Zusammenfassungen; im Meeting für die nächste Zusammenfassung änderbar.", summaryLanguage),
             prompt));
     }
 

@@ -260,7 +260,9 @@ internal static class ReadTools
     private sealed record StatusJob(
         [property: JsonPropertyName("recorded_at")] string RecordedAt,
         [property: JsonPropertyName("duration_seconds")] int DurationSeconds,
-        [property: JsonPropertyName("failure")] string? Failure);
+        [property: JsonPropertyName("failure")] string? Failure,
+        /// <summary>recording | interrupted | failed | waiting</summary>
+        [property: JsonPropertyName("state")] string State);
 
     private sealed record StatusOutput(
         [property: JsonPropertyName("pending")] List<StatusJob> Pending,
@@ -273,8 +275,8 @@ internal static class ReadTools
             Name = "get_processing_status",
             Title = "Verarbeitungsstand",
             Description = "Zeigt, ob beendete Meetings noch verarbeitet werden (Sprechererkennung, Transkription) oder fehlgeschlagen "
-                          + "sind, welches Meeting zuletzt fertig wurde, und den Stand des Suchindex. Nützlich bei „Ist mein Meeting von "
-                          + "eben schon fertig?“.",
+                          + "sind, ob gerade aufgenommen wird oder eine unterbrochene Aufnahme wartet, welches Meeting zuletzt fertig "
+                          + "wurde, und den Stand des Suchindex. Nützlich bei „Ist mein Meeting von eben schon fertig?“.",
             InputSchema = Schema.Element(Schema.Object(new JsonObject())),
             OutputSchema = Schema.Element(Schema.Object(new JsonObject
             {
@@ -286,7 +288,12 @@ internal static class ReadTools
                         ["recorded_at"] = Schema.Type("string"),
                         ["duration_seconds"] = Schema.Type("integer"),
                         ["failure"] = Schema.Type("string"),
-                    }, "recorded_at", "duration_seconds"),
+                        ["state"] = new JsonObject
+                        {
+                            ["type"] = "string",
+                            ["enum"] = new JsonArray("recording", "interrupted", "failed", "waiting"),
+                        },
+                    }, "recorded_at", "duration_seconds", "state"),
                 },
                 ["latest_meeting"] = MeetingInfo.Schema(),
                 ["index"] = Schema.Type("string"),
@@ -299,11 +306,27 @@ internal static class ReadTools
             var text = StatusText(context);
             var jobs = MeetingJob.ReadAll(context.Environment.QueueFolder);
             var output = new StatusOutput(
-                jobs.Select(j => new StatusJob(JsonCoding.FormatDate(j.RecordedAt), (int)Math.Round(j.DurationSeconds, MidpointRounding.AwayFromZero), j.Failure)).ToList(),
+                jobs.Select(j => new StatusJob(JsonCoding.FormatDate(j.RecordedAt), (int)Math.Round(j.DurationSeconds, MidpointRounding.AwayFromZero),
+                    j.Failure, StateName(JobStateOf(j, context.Environment.QueueFolder)))).ToList(),
                 context.Snapshot.Meetings.FirstOrDefault() is { } latest ? MeetingInfo.Of(latest) : null,
                 context.Search.Stats(context.Snapshot, context.Settings));
             return Task.FromResult(Results.Structured(text, output));
         });
+
+    public enum JobState { Recording, Interrupted, Failed, Waiting }
+
+    private static string StateName(JobState state) => state.ToString().ToLowerInvariant();
+
+    /// <summary>
+    /// Eine Recording-Phase ohne gehaltene Sperre ist eine abgebrochene Aufnahme, die die App beim nächsten Start rettet –
+    /// für Claude also schon „unterbrochen“.
+    /// </summary>
+    public static JobState JobStateOf(MeetingJob job, string queueFolder) => job.Phase switch
+    {
+        MeetingJobPhase.Recording => job.IsRecordingActive(queueFolder) ? JobState.Recording : JobState.Interrupted,
+        MeetingJobPhase.Interrupted => JobState.Interrupted,
+        _ => job.Failure == null ? JobState.Waiting : JobState.Failed,
+    };
 
     /// <summary>Gemeinsam mit der Ressource <c>luna://status</c>.</summary>
     public static string StatusText(ToolContext context)
@@ -319,10 +342,17 @@ internal static class ReadTools
             lines.Add($"{jobs.Count} Meeting(s) in der Warteschlange (älteste zuerst):");
             foreach (var job in jobs)
             {
-                var state = job.Failure is { } failure
-                    ? $"fehlgeschlagen: {failure} – in LunaTranscribe erneut versuchen oder verwerfen"
-                    : "wartet bzw. wird verarbeitet";
-                lines.Add($"- Aufnahme vom {Rendering.Date(job.RecordedAt)}, {MeetingTranscript.Clock(job.DurationSeconds)} – {state}");
+                var state = JobStateOf(job, context.Environment.QueueFolder) switch
+                {
+                    JobState.Recording => "Aufnahme läuft gerade",
+                    JobState.Interrupted => job.Phase == MeetingJobPhase.Interrupted
+                        ? "unterbrochene Aufnahme (App wurde während des Meetings beendet), gerettet – wartet in LunaTranscribe auf „Transkription starten“ oder „Verwerfen“"
+                        : "Aufnahme wurde unterbrochen (App beendet oder abgestürzt) – LunaTranscribe rettet sie beim nächsten Start",
+                    JobState.Failed => $"fehlgeschlagen: {job.Failure} – in LunaTranscribe erneut versuchen oder verwerfen",
+                    _ => "wartet bzw. wird verarbeitet",
+                };
+                var duration = job.Phase == MeetingJobPhase.Recording ? "" : $", {MeetingTranscript.Clock(job.DurationSeconds)}";
+                lines.Add($"- Aufnahme vom {Rendering.Date(job.RecordedAt)}{duration} – {state}");
             }
         }
         if (context.Snapshot.Meetings.FirstOrDefault() is { } latest)

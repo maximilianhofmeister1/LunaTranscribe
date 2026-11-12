@@ -140,7 +140,7 @@ public class SummaryPromptTests
     public void Instructions()
     {
         var de = SummaryPrompt.Instructions(SummaryPrompt.DefaultTemplate, AppLanguage.German);
-        Assert.Contains("Schreibe eine Zusammenfassung auf Deutsch in Markdown mit genau diesen Abschnitten:", de);
+        Assert.Contains("Schreibe eine Zusammenfassung auf Deutsch in Markdown mit genau diesen Abschnitten (Überschriften auf Deutsch):", de);
         Assert.DoesNotContain("{language}", de);
         Assert.DoesNotContain("\r", de);
         Assert.StartsWith("Du bekommst das Transkript eines Meetings. Es wurde automatisch per Spracherkennung erstellt und kann Hörfehler", de);

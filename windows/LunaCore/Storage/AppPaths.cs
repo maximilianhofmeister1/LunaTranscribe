@@ -47,8 +47,8 @@ public static class AppPaths
     public static string McpActivityLog => Path.Combine(DataDirectory, "mcp-activity.log");
 
     /// <summary>
-    /// Laufende Meeting-Aufnahmen; wandern beim Beenden in die Warteschlange. Windows hat keinen Caches-Ordner,
-    /// deshalb unter der Basis statt unter ~/Library/Caches.
+    /// Bis 1.1.0 lagen laufende Meeting-Aufnahmen hier. Heute nimmt die App direkt in die Warteschlange auf; der Ordner
+    /// wird nur noch beim Start gelesen, um Reste einer abgebrochenen Aufnahme zu retten (<see cref="RecordingRecovery"/>).
     /// </summary>
     public static string MeetingRecordings => Path.Combine(DataDirectory, "Recordings");
 

@@ -6,7 +6,7 @@ using LunaCore;
 namespace LunaTranscribe.Refine;
 
 /// <summary>
-/// Gemeinsame Schnittstelle der Nachbearbeitungs-Backends (unter Windows nur llama.cpp).
+/// Gemeinsame Schnittstelle der Nachbearbeitungs-Backends (llama.cpp lokal, Claude CLI in der Cloud).
 /// Zustandslos pro Aufruf: jedes Diktat wird unabhängig vom vorherigen bereinigt.
 /// </summary>
 public interface ITextRefiner : IDisposable
@@ -18,7 +18,7 @@ public interface ITextRefiner : IDisposable
     bool FilesPresent { get; }
 
     /// <summary>
-    /// Lädt das Modell (beim ersten Mal Download von Hugging Face) und wärmt es auf.
+    /// Lädt das Modell (beim ersten Mal Download von Hugging Face) und wärmt es auf; Claude: findet die CLI.
     /// <paramref name="progress"/> liegt zwischen 0 und 1 (0–0.9 Download, 0.9–0.95 Laden, 0.95–1 Warm-up).
     /// <paramref name="warmup"/>: Sprache + Anweisung, für die der Prompt-Anfang schon vorberechnet wird (optional).
     /// </summary>

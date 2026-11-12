@@ -88,6 +88,10 @@
                     <t:LunaIcon Kind="Waveform" Size="12" Foreground="{DynamicResource Luna.Lavender}" VerticalAlignment="Center" Margin="0,0,6,0" />
                     <TextBlock x:Name="QueueText" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource Luna.Lavender}" />
                 </StackPanel>
+                <StackPanel x:Name="InterruptedLine" Orientation="Horizontal" Visibility="Collapsed">
+                    <t:LunaIcon Kind="Undo" Size="12" Foreground="{DynamicResource Luna.Honey}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <TextBlock x:Name="InterruptedText" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource Luna.Honey}" />
+                </StackPanel>
                 <TextBlock Text="Lokal auf diesem PC · Open Source" FontSize="10.5" Foreground="{DynamicResource Luna.InkMuted}" Opacity="0.8" />
             </t:VStack>
 

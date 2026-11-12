@@ -7,6 +7,7 @@ using System.Windows.Threading;
 using LunaCore;
 using LunaTranscribe.Core;
 using LunaTranscribe.Engine;
+using LunaTranscribe.Settings;
 
 namespace LunaTranscribe.Refine;
 
@@ -15,7 +16,7 @@ namespace LunaTranscribe.Refine;
 /// <code>
 /// LunaTranscribe.exe --refine-selftest "ähm also ich wollte sagen dass dass wir morgen um elf uhr das meeting haben" --language de
 /// </code>
-/// Optional <c>--model lfm2|qwen3_1_7b|qwen3_4b</c> (Standard: LFM2), <c>--language de|en|…</c> (Standard: de) und
+/// Optional <c>--model lfm2|qwen3_1_7b|qwen3_4b|claudeHaiku</c> (Standard: LFM2), <c>--language de|en|…</c> (Standard: de) und
 /// <c>--prompt &lt;datei&gt;</c> (Anweisung mit <c>{language}</c>, Standard: eingebaute) zum Vergleichen von Prompt-Varianten.
 /// Lädt das Modell (beim ersten Mal mit Download), bereinigt den Text dreimal (erster Lauf = kalt, weitere = warm)
 /// und druckt Ergebnis und Dauer.
@@ -29,7 +30,7 @@ internal static class RefineSelfTest
 
         if (args.Length == 0 || args[0].StartsWith("--"))
         {
-            SelfTests.Print("Aufruf: --refine-selftest \"<text>\" [--model lfm2|qwen3_1_7b|qwen3_4b] [--language de] [--prompt <datei>]");
+            SelfTests.Print("Aufruf: --refine-selftest \"<text>\" [--model lfm2|qwen3_1_7b|qwen3_4b|claudeHaiku] [--language de] [--prompt <datei>]");
             return 2;
         }
         var text = args[0];
@@ -61,10 +62,11 @@ internal static class RefineSelfTest
             }
         }
 
-        SelfTests.Print($"Modell: {kind.ShortLabel()} ({kind.Model().HuggingFaceRepo}/{kind.Model().Files[0]}), Sprache: {language.DisplayName()}");
+        var source = kind.IsCloud() ? $"Claude CLI, {ClaudeRefiner.Model}, --effort {ClaudeRefiner.Effort}" : $"{kind.Model().HuggingFaceRepo}/{kind.Model().Files[0]}";
+        SelfTests.Print($"Modell: {kind.ShortLabel()} ({source}), Sprache: {language.DisplayName()}");
         if (template != null) SelfTests.Print($"Anweisung aus Datei ({template.Length} Zeichen)");
 
-        var manager = new RefinerManager(Dispatcher.CurrentDispatcher);
+        var manager = new RefinerManager(Dispatcher.CurrentDispatcher) { ClaudeCliPath = () => SettingsStore.Shared.ClaudeCliPath };
         try
         {
             // Wie in der App: Prompt-Anfang (Anweisung + Beispiele) wird beim Laden vorberechnet; „kalt“ = erstes Diktat danach.
