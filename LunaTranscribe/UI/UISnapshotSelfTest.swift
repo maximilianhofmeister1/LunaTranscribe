@@ -68,6 +68,15 @@ enum UISnapshotSelfTest {
                                  appearance: appearance, to: output.appending(path: "settings-\(section.rawValue)-\(name).png"))
             }
             state.router.settingsSection = .general
+            // Die Karte „Zusammenfassung“ liegt unterhalb des Fensters – einzeln in voller Höhe, je Anbieter.
+            let chosenProvider = state.settings.summaryProvider
+            for provider in SummaryProvider.allCases {
+                state.settings.summaryProvider = provider
+                try await render(meetingSettingsSnapshot.environmentObject(state), size: NSSize(width: 860, height: 1_700),
+                                 appearance: appearance, titled: false,
+                                 to: output.appending(path: "settings-summary-\(provider.rawValue)-\(name).png"))
+            }
+            state.settings.summaryProvider = chosenProvider
             try await render(MenuBarView().environmentObject(state), size: NSSize(width: 320, height: 420),
                              appearance: appearance, titled: false, to: output.appending(path: "menubar-\(name).png"))
             if let sample {
@@ -178,6 +187,14 @@ enum UISnapshotSelfTest {
         try await Task.sleep(for: .milliseconds(250))
         host.layoutSubtreeIfNeeded()
         host.display()
+    }
+
+    /// Einstellungen → Meetings ohne Fenster drumherum, unten ausgerichtet (die Zusammenfassung ist die letzte Karte).
+    private static var meetingSettingsSnapshot: some View {
+        VStack(alignment: .leading, spacing: 16) { MeetingSettings() }
+            .padding(LunaMetrics.pagePadding)
+            .frame(width: 860, height: 1_700, alignment: .bottom)
+            .background(LunaColor.background)
     }
 
     /// Der Tab „Zusammenfassung“ öffnet erst per Klick, deshalb wird er einzeln gerendert –

@@ -46,11 +46,21 @@ final class SettingsStore: ObservableObject {
 
     var meetingFolderURL: URL { AppPaths.meetingFolder(from: meetingFolder) }
 
-    // MARK: Zusammenfassung (Claude CLI)
-    /// Pfad zur Claude CLI; "" = automatisch suchen.
+    // MARK: Zusammenfassung (Claude, Antigravity oder Codex CLI)
+    /// Über welche CLI Meetings zusammengefasst werden.
+    @Published var summaryProvider: SummaryProvider { didSet { save(summaryProvider, .summaryProvider) } }
+    /// Pfad zur Claude CLI; "" = automatisch suchen. Auch für die Nachbearbeitung mit Claude Haiku.
     @Published var claudeCLIPath: String { didSet { save(claudeCLIPath, .claudeCLIPath) } }
     /// Modell-Alias oder -Name für `claude --model`; "" = Standard der CLI.
     @Published var claudeModel: String { didSet { save(claudeModel, .claudeModel) } }
+    /// Pfad zur Antigravity CLI (`agy`); "" = automatisch suchen.
+    @Published var antigravityCLIPath: String { didSet { save(antigravityCLIPath, .antigravityCLIPath) } }
+    /// Modell für `agy --model` (siehe `agy models`); "" = Standard der CLI.
+    @Published var antigravityModel: String { didSet { save(antigravityModel, .antigravityModel) } }
+    /// Pfad zur Codex CLI; "" = automatisch suchen.
+    @Published var codexCLIPath: String { didSet { save(codexCLIPath, .codexCLIPath) } }
+    /// Modell für `codex exec --model`; "" = Standard der CLI.
+    @Published var codexModel: String { didSet { save(codexModel, .codexModel) } }
     /// Anweisung für die Zusammenfassung; gespeichert wird nur eine Abweichung vom Standard.
     @Published var summaryPrompt: String {
         didSet { saveUnlessDefault(summaryPrompt, default: SummaryPrompt.defaultTemplate, .summaryPrompt) }
@@ -58,8 +68,51 @@ final class SettingsStore: ObservableObject {
     /// Standardsprache der Zusammenfassung; im Meeting für die nächste Zusammenfassung änderbar.
     /// Auch in `SharedSettings` (luna-mcp, Prompt `meeting_summary`).
     @Published var summaryLanguage: SummaryLanguage { didSet { save(summaryLanguage, .summaryLanguage) } }
-    /// Der einmalige Hinweis „Text geht an Anthropic“ wurde bestätigt.
-    @Published var summaryCloudNoticeAccepted: Bool { didSet { save(summaryCloudNoticeAccepted, .summaryCloudNoticeAccepted) } }
+    /// Anbieter (`SummaryProvider.rawValue`), deren einmaliger Hinweis „Text geht an …“ bestätigt wurde.
+    @Published var summaryCloudNoticesAccepted: Set<String> {
+        didSet { saveJSON(summaryCloudNoticesAccepted, .summaryCloudNoticesAccepted) }
+    }
+
+    func cliPath(for provider: SummaryProvider) -> String {
+        switch provider {
+        case .claude: return claudeCLIPath
+        case .antigravity: return antigravityCLIPath
+        case .codex: return codexCLIPath
+        }
+    }
+
+    func setCLIPath(_ path: String, for provider: SummaryProvider) {
+        switch provider {
+        case .claude: claudeCLIPath = path
+        case .antigravity: antigravityCLIPath = path
+        case .codex: codexCLIPath = path
+        }
+    }
+
+    /// Eingestelltes Modell ohne Leerraum; "" = Standard der CLI.
+    func model(for provider: SummaryProvider) -> String {
+        switch provider {
+        case .claude: return claudeModel.trimmingCharacters(in: .whitespaces)
+        case .antigravity: return antigravityModel.trimmingCharacters(in: .whitespaces)
+        case .codex: return codexModel.trimmingCharacters(in: .whitespaces)
+        }
+    }
+
+    func setModel(_ model: String, for provider: SummaryProvider) {
+        switch provider {
+        case .claude: claudeModel = model
+        case .antigravity: antigravityModel = model
+        case .codex: codexModel = model
+        }
+    }
+
+    func isSummaryCloudNoticeAccepted(for provider: SummaryProvider) -> Bool {
+        summaryCloudNoticesAccepted.contains(provider.rawValue)
+    }
+
+    func acceptSummaryCloudNotice(for provider: SummaryProvider) {
+        summaryCloudNoticesAccepted.insert(provider.rawValue)
+    }
 
     var isSummaryPromptDefault: Bool { summaryPrompt == SummaryPrompt.defaultTemplate }
     func resetSummaryPrompt() { summaryPrompt = SummaryPrompt.defaultTemplate }
@@ -135,11 +188,19 @@ final class SettingsStore: ObservableObject {
         meetingKeepAudio = Self.load(.meetingKeepAudio, default: false)
         meetingFolder = Self.load(.meetingFolder, default: "")
         meetingSpeakerCount = Self.load(.meetingSpeakerCount, default: 0)
+        summaryProvider = Self.load(.summaryProvider, default: .claude)
         claudeCLIPath = Self.load(.claudeCLIPath, default: "")
         claudeModel = Self.load(.claudeModel, default: "")
+        antigravityCLIPath = Self.load(.antigravityCLIPath, default: "")
+        antigravityModel = Self.load(.antigravityModel, default: "")
+        codexCLIPath = Self.load(.codexCLIPath, default: "")
+        codexModel = Self.load(.codexModel, default: "")
         summaryPrompt = Self.load(.summaryPrompt, default: SummaryPrompt.defaultTemplate)
         summaryLanguage = Self.load(.summaryLanguage, default: .meeting)
-        summaryCloudNoticeAccepted = Self.load(.summaryCloudNoticeAccepted, default: false)
+        // Bis 1.2 gab es nur Claude und einen einzelnen Schalter für dessen Hinweis.
+        let legacyNotice: Bool = Self.load(.summaryCloudNoticeAccepted, default: false)
+        summaryCloudNoticesAccepted = Self.loadJSON(.summaryCloudNoticesAccepted,
+                                                    default: legacyNotice ? [SummaryProvider.claude.rawValue] : [])
         refinerKind = Self.load(.refinerKind, default: .lfm2_1_2b)
         refinePrompt = Self.load(.refinePrompt, default: RefinePrompt.defaultTemplate)
         vocabularyEnabled = Self.load(.vocabularyEnabled, default: true)
@@ -168,7 +229,10 @@ final class SettingsStore: ObservableObject {
         case meetingCaptureSystemAudio, meetingKeepAudio, meetingSpeakerCount
         /// Historischer Name aus der Zeit, als der Ordner nur Backups/Exporte enthielt.
         case meetingFolder = "meetingExportFolder"
-        case claudeCLIPath, claudeModel, summaryPrompt, summaryCloudNoticeAccepted
+        case claudeCLIPath, claudeModel, summaryPrompt
+        /// Bis 1.2: Bool für den Claude-Hinweis; wird nur noch gelesen (Übernahme).
+        case summaryCloudNoticeAccepted
+        case summaryProvider, antigravityCLIPath, antigravityModel, codexCLIPath, codexModel, summaryCloudNoticesAccepted
         /// Auch in `SharedSettings.Key` (luna-mcp) – dort gleich halten.
         case summaryLanguage
         case refinerKind, refinePrompt

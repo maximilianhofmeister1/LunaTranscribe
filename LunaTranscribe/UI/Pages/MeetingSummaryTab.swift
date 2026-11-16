@@ -21,10 +21,10 @@ struct MeetingSummaryTab: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .lunaCard()
             }
-            if isSummarizing {
+            if let provider = state.summarizer.running[transcript.id] {
                 HStack(spacing: 10) {
                     ProgressView().controlSize(.small)
-                    Text("Claude fasst das Meeting zusammen … das dauert je nach Länge 10–60 Sekunden.")
+                    Text("\(provider.label) fasst das Meeting zusammen … das dauert je nach Länge 10–60 Sekunden.")
                         .font(LunaFont.text(13)).foregroundStyle(LunaColor.inkMuted)
                 }
                 .lunaCard()
@@ -66,7 +66,7 @@ struct MeetingSummaryTab: View {
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionTitle(title: "Noch keine Zusammenfassung", systemImage: "sparkles")
-            Hint("„Zusammenfassen“ schickt das Transkript über die Claude CLI an Claude und legt Kurzfassung, Themen, Entscheidungen, Aufgaben und offene Fragen hier ab. Die Sprache wählst du daneben, Standard und Anweisung unter Einstellungen → Meetings.")
+            Hint("„Zusammenfassen“ schickt das Transkript über die \(state.settings.summaryProvider.cliName) an \(state.settings.summaryProvider.label) und legt Kurzfassung, Themen, Entscheidungen, Aufgaben und offene Fragen hier ab. Die Sprache wählst du daneben, Anbieter, Standard und Anweisung unter Einstellungen → Meetings.")
             Button("Einstellungen öffnen…") { state.openSettings(.meetings) }.buttonStyle(.lunaQuiet)
         }
         .lunaCard()
@@ -88,7 +88,8 @@ struct MeetingSummaryTab: View {
 
     /// „Erstellt 21.09.2026, 10:00 mit Claude (sonnet) · Englisch · bearbeitet 21.09.2026, 10:05“
     static func origin(of summary: MeetingSummary) -> String {
-        var parts = ["Erstellt \(summary.createdAt.lunaDateTime) mit Claude\(summary.model.map { " (\($0))" } ?? "")"]
+        let source = summary.resolvedProvider.label + (summary.model.map { " (\($0))" } ?? "")
+        var parts = ["Erstellt \(summary.createdAt.lunaDateTime) mit \(source)"]
         if let language = summary.language { parts.append(language.displayName) }
         if let editedAt = summary.editedAt { parts.append("bearbeitet \(editedAt.lunaDateTime)") }
         return parts.joined(separator: " · ")

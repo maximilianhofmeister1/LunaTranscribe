@@ -12,20 +12,24 @@ struct PrivacySettings: View {
     @State private var activity: [ActivityEntry] = []
     @State private var undoError: String?
 
+    private var acceptedNoticeProviders: String {
+        SummaryProvider.allCases.filter(settings.isSummaryCloudNoticeAccepted(for:)).map(\.label).joined(separator: ", ")
+    }
+
     var body: some View {
         SettingsCard(title: "Local-First", systemImage: "lock.shield") {
             ToggleRow(label: "Letzte Diktate im Verlauf zeigen",
                       hint: "Nur im Arbeitsspeicher, nie auf der Platte; weg, sobald die App beendet wird.",
                       isOn: $settings.keepHistory)
-            LearnMore(text: "Diktat-Audio bleibt ausschließlich im Arbeitsspeicher und wird direkt nach der Transkription verworfen. Meeting-Aufnahmen liegen während der Verarbeitung temporär in ~/Library/Caches und werden danach gelöscht (außer „Aufnahme behalten“). Transkripte liegen als JSON in deinem Meeting-Ordner. Ausnahmen vom Local-First-Prinzip sind nur die freiwillige Zusammenfassung über die Claude CLI, die Nachbearbeitung mit Claude Haiku (wenn du sie wählst) und – wenn du sie freigibst – Meetings, die Claude über luna-mcp liest.")
+            LearnMore(text: "Diktat-Audio bleibt ausschließlich im Arbeitsspeicher und wird direkt nach der Transkription verworfen. Meeting-Aufnahmen liegen während der Verarbeitung temporär in ~/Library/Caches und werden danach gelöscht (außer „Aufnahme behalten“). Transkripte liegen als JSON in deinem Meeting-Ordner. Ausnahmen vom Local-First-Prinzip sind nur die freiwillige Zusammenfassung über die Claude, Antigravity oder Codex CLI, die Nachbearbeitung mit Claude Haiku (wenn du sie wählst) und – wenn du sie freigibst – Meetings, die Claude über luna-mcp liest.")
             if !settings.ignoredSuggestionKeys.isEmpty {
                 SettingRow(label: "Ignorierte Wörterbuch-Vorschläge", hint: "\(settings.ignoredSuggestionKeys.count) Korrekturen werden nicht mehr vorgeschlagen.") {
                     Button("Zurücksetzen") { settings.ignoredSuggestionKeys = [] }.buttonStyle(.lunaSecondary)
                 }
             }
-            if settings.summaryCloudNoticeAccepted {
-                SettingRow(label: "Cloud-Hinweis für Zusammenfassungen", hint: "Wurde bestätigt.") {
-                    Button("Wieder anzeigen") { settings.summaryCloudNoticeAccepted = false }.buttonStyle(.lunaSecondary)
+            if !settings.summaryCloudNoticesAccepted.isEmpty {
+                SettingRow(label: "Cloud-Hinweis für Zusammenfassungen", hint: "Bestätigt für \(acceptedNoticeProviders).") {
+                    Button("Wieder anzeigen") { settings.summaryCloudNoticesAccepted = [] }.buttonStyle(.lunaSecondary)
                 }
             }
         }

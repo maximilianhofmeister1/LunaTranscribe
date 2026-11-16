@@ -1,14 +1,16 @@
 import Foundation
 import LunaCore
 
-/// Entwickler-Einstieg für die Zusammenfassung über die Claude CLI – über denselben Code wie der
-/// Button in der App (`ClaudeCLI`, `SummaryPrompt`), ohne Modelle und ohne Berechtigungen:
+/// Entwickler-Einstieg für die Zusammenfassung über eine Anbieter-CLI – über denselben Code wie der
+/// Button in der App (`SummaryCLI`, `SummaryPrompt`), ohne Modelle und ohne Berechtigungen:
 ///
-///     LunaTranscribe --summary-selftest <Meeting-Ordner/meeting.json> [--cli /pfad/zu/claude] [--model sonnet] [--language en]
+///     LunaTranscribe --summary-selftest <Meeting-Ordner/meeting.json> [--provider claude|antigravity|codex]
+///                    [--cli /pfad/zur/cli] [--model sonnet] [--language en]
 ///
+/// `--provider` wählt die CLI (Standard: claude).
 /// Ohne Datei fasst der Test ein kurzes eingebautes Gespräch zusammen. `--language` wählt die Zielsprache
 /// (Sprachcode wie in `AppLanguage`), ohne sie gilt die Sprache des Meetings. `--cli` mit einem falschen Pfad
-/// prüft die Fehlermeldung „CLI nicht gefunden“. Achtung: Der Text geht an Anthropic.
+/// prüft die Fehlermeldung „CLI nicht gefunden“. Achtung: Der Text geht an den Anbieter (Anthropic, Google, OpenAI).
 enum SummarySelfTest {
     static let flag = "--summary-selftest"
 
@@ -19,18 +21,22 @@ enum SummarySelfTest {
         let cliPath = value(after: "--cli", in: args) ?? ""
         let model = value(after: "--model", in: args)
         let targetLanguage = value(after: "--language", in: args).flatMap(AppLanguage.init(rawValue:))
+        let providerName = value(after: "--provider", in: args) ?? SummaryProvider.claude.rawValue
 
         Task {
             do {
+                guard let provider = SummaryProvider(rawValue: providerName) else {
+                    throw SelfTestError("Unbekannter Anbieter „\(providerName)“ – claude, antigravity oder codex.")
+                }
                 let transcript = try file.map(load) ?? sample
-                guard let cli = ClaudeCLI.locate(customPath: cliPath) else { throw ClaudeCLI.CLIError.notFound }
+                guard let cli = provider.locateCLI(customPath: cliPath) else { throw CLIError.notFound(provider) }
                 print("CLI: \(cli.executable.path) · \(try await cli.version())")
                 let language = targetLanguage ?? transcript.language
                 print("Meeting: \(transcript.title), \(transcript.turns.count) Beiträge, \(transcript.wordCount) Wörter → \(language.displayName)\n")
                 let started = Date()
                 let summary = try await cli.complete(
                     instructions: SummaryPrompt.instructions(template: SummaryPrompt.defaultTemplate, language: language),
-                    input: transcript.render(as: .text), model: model)
+                    input: transcript.render(as: .text), model: model, timeout: 300)
                 print(summary)
                 print(String(format: "\n(%.1f s)", Date().timeIntervalSince(started)))
                 exit(0)
@@ -40,6 +46,11 @@ enum SummarySelfTest {
             }
         }
         return true
+    }
+
+    private struct SelfTestError: LocalizedError {
+        let errorDescription: String?
+        init(_ message: String) { errorDescription = message }
     }
 
     private static func value(after flag: String, in args: [String]) -> String? {
