@@ -82,6 +82,30 @@ struct SummaryTests {
         #expect(roundTrip == withLanguage)
     }
 
+    @Test("Anbieter: fehlt = Claude, unbekannt macht das Meeting nicht unlesbar, Bearbeiten behält ihn")
+    func providerCoding() throws {
+        let legacy = Data(#"{"markdown":"Kurz.","createdAt":"2026-09-21T10:00:00Z"}"#.utf8)
+        let decoded = try JSONCoding.decoder().decode(MeetingSummary.self, from: legacy)
+        #expect(decoded.provider == nil && decoded.resolvedProvider == .claude)
+        let encodedLegacy = try #require(String(data: try JSONCoding.encoder().encode(decoded), encoding: .utf8))
+        #expect(!encodedLegacy.contains("provider"))
+
+        let future = Data(#"{"markdown":"Kurz.","createdAt":"2026-09-21T10:00:00Z","provider":"ollama"}"#.utf8)
+        #expect(try JSONCoding.decoder().decode(MeetingSummary.self, from: future).provider == nil)
+
+        let codex = MeetingSummary(markdown: "Kurz.", createdAt: Date(timeIntervalSince1970: 1_790_000_000), provider: .codex)
+        let encoded = try #require(String(data: try JSONCoding.encoder().encode(codex), encoding: .utf8))
+        #expect(encoded.contains(#""provider":"codex""#) || encoded.contains(#""provider" : "codex""#))
+        #expect(try JSONCoding.decoder().decode(MeetingSummary.self, from: Data(encoded.utf8)) == codex)
+        #expect(codex.revised(markdown: "Neu.").provider == .codex)
+    }
+
+    @Test("Anbieter: Rohwerte sind stabil")
+    func providerRawValues() {
+        #expect(SummaryProvider.allCases.map(\.rawValue) == ["claude", "antigravity", "codex"])
+        #expect(SummaryProvider.allCases.map(\.command) == ["claude", "agy", "codex"])
+    }
+
     @Test("Einstellung: fehlender oder ungültiger Wert heißt „wie das Meeting“")
     func sharedSettingsReadSummaryLanguage() throws {
         let name = "lunacore.test.summary.\(UUID().uuidString)"

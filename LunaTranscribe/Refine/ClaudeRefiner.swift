@@ -32,7 +32,7 @@ final class ClaudeRefiner: TextRefiner {
         let customPath = await MainActor.run { SettingsStore.shared.claudeCLIPath }
         // `locate` fragt im Zweifel die Login-Shell – nicht auf dem Main Thread.
         guard let found = await Task.detached(operation: { ClaudeCLI.locate(customPath: customPath) }).value else {
-            throw RefinerError.unavailable(ClaudeCLI.CLIError.notFound.localizedDescription)
+            throw RefinerError.unavailable(CLIError.notFound(.claude).localizedDescription)
         }
         let version = try await found.version()
         cli = found
@@ -53,13 +53,12 @@ final class ClaudeRefiner: TextRefiner {
         do {
             raw = try await cli.complete(instructions: system, input: RefinePrompt.userMessage(for: text),
                                          model: Self.model, effort: Self.effort, timeout: timeout)
-        } catch ClaudeCLI.CLIError.timedOut {
+        } catch CLIError.timedOut {
             throw RefinerError.timeout
-        } catch ClaudeCLI.CLIError.failed(_, let message)
-                    where message.localizedCaseInsensitiveContains("auth") || message.localizedCaseInsensitiveContains("login") {
+        } catch CLIError.notLoggedIn {
             // Kurz halten – der Grund erscheint im Overlay.
             throw RefinerError.unavailable("Claude CLI nicht angemeldet (im Terminal „claude“ starten)")
-        } catch let error as ClaudeCLI.CLIError {
+        } catch let error as CLIError {
             throw RefinerError.unavailable(error.localizedDescription)
         }
 

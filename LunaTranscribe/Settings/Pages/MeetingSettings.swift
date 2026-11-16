@@ -45,15 +45,24 @@ struct MeetingSettings: View {
             }
         }
 
-        SettingsCard(title: "Zusammenfassung mit Claude", systemImage: "sparkles") {
-            Label("Die Transkription bleibt lokal. Nur wenn du bei einem Meeting „Zusammenfassen“ klickst, geht dessen Text über die Claude CLI an Anthropic.",
+        SettingsCard(title: "Zusammenfassung", systemImage: "sparkles") {
+            Label("Die Transkription bleibt lokal. Nur wenn du bei einem Meeting „Zusammenfassen“ klickst, geht dessen Text über die \(provider.cliName) an \(provider.vendor).",
                   systemImage: "cloud")
                 .font(LunaFont.caption(12))
                 .foregroundStyle(LunaColor.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
 
-            SettingRow(label: "Claude CLI", hint: "Leer = automatisch suchen (~/.local/bin, Homebrew, Login-Shell).") {
-                TextField("automatisch", text: $settings.claudeCLIPath)
+            SettingRow(label: "Anbieter", hint: "Läuft über die CLI des Anbieters mit deinem Konto bzw. Abo – kein API-Schlüssel nötig.") {
+                Picker("", selection: $settings.summaryProvider) {
+                    ForEach(SummaryProvider.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 260)
+                .onChange(of: settings.summaryProvider) { cliCheck = nil }
+            }
+            SettingRow(label: provider.cliName, hint: provider.pathHint) {
+                TextField("automatisch", text: cliPathBinding)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 220)
                 Button(checking ? "Prüfe…" : "Testen", action: checkCLI)
@@ -65,11 +74,15 @@ struct MeetingSettings: View {
                     .font(LunaFont.caption(12))
                     .foregroundStyle(cliCheckFailed ? LunaColor.rose : LunaColor.sage)
                     .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
             }
-            SettingRow(label: "Modell", hint: "Alias wie „sonnet“ oder „opus“; leer = Standard der CLI.") {
-                TextField("Standard", text: $settings.claudeModel)
+            SettingRow(label: "Modell", hint: provider.modelHint) {
+                TextField("Standard", text: modelBinding)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 220)
+            }
+            if let dataUse = provider.dataUse {
+                Hint(dataUse)
             }
             SettingRow(label: "Sprache", hint: "Standard für neue Zusammenfassungen; im Meeting für die nächste Zusammenfassung änderbar.") {
                 Picker("", selection: $settings.summaryLanguage) {
@@ -112,12 +125,32 @@ struct MeetingSettings: View {
         }
     }
 
+    // MARK: Anbieter
+
+    private var provider: SummaryProvider { settings.summaryProvider }
+
+    private var cliPathBinding: Binding<String> {
+        Binding(get: { settings.cliPath(for: provider) }, set: { settings.setCLIPath($0, for: provider) })
+    }
+
+    /// Ungetrimmt lesen, sonst springt der Cursor beim Tippen eines Leerzeichens.
+    private var modelBinding: Binding<String> {
+        Binding(get: {
+            switch provider {
+            case .claude: return settings.claudeModel
+            case .antigravity: return settings.antigravityModel
+            case .codex: return settings.codexModel
+            }
+        }, set: { settings.setModel($0, for: provider) })
+    }
+
     // MARK: Aktionen
 
     private func checkCLI() {
         checking = true
+        let provider = provider
         Task {
-            let result = await state.summarizer.checkCLI()
+            let result = await state.summarizer.checkCLI(provider)
             checking = false
             switch result {
             case .success(let info): cliCheck = "Gefunden: \(info)"; cliCheckFailed = false

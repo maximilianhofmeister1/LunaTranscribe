@@ -13,7 +13,7 @@ struct RefineSettings: View {
             .labelsHidden()
             LoadStatusView(status: state.refiners.loadStatus) { state.refiners.retry(settings.refinerKind) }
             if settings.refinerKind == .claudeHaiku {
-                Hint("Cloud: Jedes nachbearbeitete Diktat geht über die Claude CLI und dein Claude-Konto an Anthropic (Haiku, niedriger Aufwand). Kein API-Schlüssel nötig – die CLI muss installiert und angemeldet sein; den Pfad stellst du unter Meetings → „Zusammenfassung mit Claude“ ein.")
+                Hint("Cloud: Jedes nachbearbeitete Diktat geht über die Claude CLI und dein Claude-Konto an Anthropic (Haiku, niedriger Aufwand). Kein API-Schlüssel nötig – die CLI muss installiert und angemeldet sein; den Pfad stellst du unter Meetings → „Zusammenfassung“ beim Anbieter Claude ein.")
             }
             LearnMore(text: "Der dritte Hotkey lässt ein Sprachmodell das Diktat bereinigen: Rechtschreibung, Grammatik, Füllwörter, Wiederholungen und Versprecher – Wortwahl und Ton bleiben erhalten. Meeting-Transkripte sind nicht betroffen. Schlägt die Nachbearbeitung fehl, wird der Rohtext eingefügt. MLX-Modelle rechnen lokal auf der GPU; Apple Intelligence nutzt das Systemmodell auf der Neural Engine; Claude Haiku läuft in der Cloud.")
         }

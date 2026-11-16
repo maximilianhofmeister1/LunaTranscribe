@@ -2,13 +2,14 @@ import Combine
 import Foundation
 import LunaCore
 
-/// Erstellt Meeting-Zusammenfassungen über die Claude CLI. Läuft je Meeting höchstens einmal
+/// Erstellt Meeting-Zusammenfassungen über die eingestellte CLI (`SummaryProvider`: Claude, Antigravity
+/// oder Codex). Läuft je Meeting höchstens einmal
 /// gleichzeitig und schreibt das Ergebnis selbst in die Bibliothek – auch wenn das Meeting
 /// inzwischen nicht mehr angezeigt wird.
 @MainActor
 final class MeetingSummarizer: ObservableObject {
-    /// Meetings, für die gerade eine Zusammenfassung läuft.
-    @Published private(set) var running: Set<UUID> = []
+    /// Meetings, für die gerade eine Zusammenfassung läuft, mit dem Anbieter dieses Laufs.
+    @Published private(set) var running: [UUID: SummaryProvider] = [:]
     /// Letzter Fehler je Meeting (bis zum nächsten Versuch).
     @Published private(set) var errors: [UUID: String] = [:]
 
@@ -24,42 +25,45 @@ final class MeetingSummarizer: ObservableObject {
         self.store = store
     }
 
-    func isRunning(_ id: UUID) -> Bool { running.contains(id) }
+    func isRunning(_ id: UUID) -> Bool { running[id] != nil }
 
     /// Fasst `transcript` in `language` zusammen (Wahl im Meeting, vorbelegt aus `SettingsStore.summaryLanguage`).
     /// Ersetzt eine vorhandene – auch bearbeitete – Zusammenfassung; das Nachfragen ist Sache der Oberfläche.
     func summarize(_ transcript: MeetingTranscript, language: AppLanguage) {
         let id = transcript.id
-        guard !running.contains(id) else { return }
+        guard running[id] == nil else { return }
         errors[id] = nil
-        // Vertraulich heißt: kein Text an Anthropic – weder über luna-mcp noch über die Zusammenfassung.
+        // Vertraulich heißt: kein Text in die Cloud – weder über luna-mcp noch über die Zusammenfassung.
         guard !transcript.confidential else {
-            errors[id] = "Dieses Meeting ist als vertraulich markiert und wird nicht an Claude geschickt."
+            errors[id] = "Dieses Meeting ist als vertraulich markiert und wird nicht in der Cloud zusammengefasst."
             return
         }
 
-        guard let cli = ClaudeCLI.locate(customPath: settings.claudeCLIPath) else {
-            errors[id] = ClaudeCLI.CLIError.notFound.localizedDescription
-            return
-        }
+        let provider = settings.summaryProvider
+        let customPath = settings.cliPath(for: provider)
         let instructions = SummaryPrompt.instructions(template: settings.summaryPrompt, language: language)
         let input = transcript.render(as: .text)
-        let model = settings.claudeModel.trimmingCharacters(in: .whitespaces)
+        let model = settings.model(for: provider)
 
-        running.insert(id)
-        Log.summary.notice("summary started: \(transcript.wordCount) words in \(language.rawValue, privacy: .public) via \(cli.executable.path, privacy: .public)")
+        running[id] = provider
         tasks[id] = Task { [weak self] in
             let started = Date()
             do {
-                let markdown = try await cli.complete(instructions: instructions, input: input, model: model.isEmpty ? nil : model)
+                // `locateCLI` fragt im Zweifel die Login-Shell – nicht auf dem Main Thread.
+                guard let cli = await Task.detached(operation: { provider.locateCLI(customPath: customPath) }).value else {
+                    throw CLIError.notFound(provider)
+                }
+                Log.summary.notice("summary started: \(transcript.wordCount) words in \(language.rawValue, privacy: .public) via \(cli.executable.path, privacy: .public)")
+                let markdown = try await cli.complete(instructions: instructions, input: input,
+                                                      model: model.isEmpty ? nil : model, timeout: 300)
                 let summary = MeetingSummary(markdown: markdown, createdAt: Date(), model: model.isEmpty ? nil : model,
-                                             language: language)
+                                             language: language, provider: provider)
                 self?.finish(id, with: summary)
                 Log.summary.notice("summary done in \(Date().timeIntervalSince(started), format: .fixed(precision: 1)) s")
             } catch is CancellationError {
-                self?.running.remove(id)
+                self?.running[id] = nil
             } catch {
-                self?.running.remove(id)
+                self?.running[id] = nil
                 self?.errors[id] = error.localizedDescription
                 Log.summary.error("summary failed: \(error.localizedDescription, privacy: .public)")
             }
@@ -70,12 +74,15 @@ final class MeetingSummarizer: ObservableObject {
     func cancel(_ id: UUID) {
         tasks[id]?.cancel()
         tasks[id] = nil
-        running.remove(id)
+        running[id] = nil
     }
 
-    /// Prüft die CLI für die Einstellungen: Pfad und Version, oder die Fehlermeldung.
-    func checkCLI() async -> Result<String, Error> {
-        guard let cli = ClaudeCLI.locate(customPath: settings.claudeCLIPath) else { return .failure(ClaudeCLI.CLIError.notFound) }
+    /// Prüft die CLI eines Anbieters für die Einstellungen: Pfad und Version, oder die Fehlermeldung.
+    func checkCLI(_ provider: SummaryProvider) async -> Result<String, Error> {
+        let customPath = settings.cliPath(for: provider)
+        guard let cli = await Task.detached(operation: { provider.locateCLI(customPath: customPath) }).value else {
+            return .failure(CLIError.notFound(provider))
+        }
         do {
             let version = try await cli.version()
             return .success("\(cli.executable.path) · \(version)")
@@ -86,7 +93,7 @@ final class MeetingSummarizer: ObservableObject {
 
     /// Frischen Stand von der Platte lesen, Zusammenfassung setzen, speichern, geöffnete Ansicht informieren.
     private func finish(_ id: UUID, with summary: MeetingSummary) {
-        running.remove(id)
+        running[id] = nil
         do {
             var latest = try store.load(id)
             latest.summary = summary

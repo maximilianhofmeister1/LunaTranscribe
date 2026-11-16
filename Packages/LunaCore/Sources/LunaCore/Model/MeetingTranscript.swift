@@ -176,24 +176,57 @@ public struct MeetingTranscript: Codable, Identifiable, Equatable, Sendable {
 /// fehlen sie, werden sie auch nicht geschrieben.
 public struct MeetingSummary: Codable, Equatable, Sendable {
     public var markdown: String
-    /// Zeitpunkt, zu dem Claude die Zusammenfassung erstellt hat (bleibt beim Bearbeiten erhalten).
+    /// Zeitpunkt, zu dem das Modell die Zusammenfassung erstellt hat (bleibt beim Bearbeiten erhalten).
     public var createdAt: Date
     /// Modell, das in den Einstellungen gewählt war; nil = Standard der CLI.
     public var model: String?
-    /// Sprache, in der Claude geschrieben hat; nil bei Zusammenfassungen vor Version 1.2.
+    /// Sprache, in der das Modell geschrieben hat; nil bei Zusammenfassungen vor Version 1.2.
     public var language: AppLanguage?
-    /// Letzte Bearbeitung durch den Nutzer; nil = unverändert, wie Claude sie geschrieben hat.
+    /// Letzte Bearbeitung durch den Nutzer; nil = unverändert, wie das Modell sie geschrieben hat.
     public var editedAt: Date?
+    /// Über welche CLI die Zusammenfassung entstand; nil = Claude (alle Zusammenfassungen vor Version 1.3).
+    public var provider: SummaryProvider?
 
-    public init(markdown: String, createdAt: Date, model: String? = nil, language: AppLanguage? = nil, editedAt: Date? = nil) {
+    public init(markdown: String, createdAt: Date, model: String? = nil, language: AppLanguage? = nil,
+                editedAt: Date? = nil, provider: SummaryProvider? = nil) {
         self.markdown = markdown
         self.createdAt = createdAt
         self.model = model
         self.language = language
         self.editedAt = editedAt
+        self.provider = provider
     }
 
     public var isEdited: Bool { editedAt != nil }
+
+    /// Der Anbieter, auch für alte Dateien ohne das Feld.
+    public var resolvedProvider: SummaryProvider { provider ?? .claude }
+
+    private enum CodingKeys: String, CodingKey {
+        case markdown, createdAt, model, language, editedAt, provider
+    }
+
+    /// Eigenes Dekodieren nur wegen `provider`: Ein unbekannter Anbieter aus einer neueren Version
+    /// darf das ganze Meeting nicht unlesbar machen.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        markdown = try container.decode(String.self, forKey: .markdown)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        model = try container.decodeIfPresent(String.self, forKey: .model)
+        language = try container.decodeIfPresent(AppLanguage.self, forKey: .language)
+        editedAt = try container.decodeIfPresent(Date.self, forKey: .editedAt)
+        provider = try container.decodeIfPresent(String.self, forKey: .provider).flatMap(SummaryProvider.init(rawValue:))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(markdown, forKey: .markdown)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encodeIfPresent(model, forKey: .model)
+        try container.encodeIfPresent(language, forKey: .language)
+        try container.encodeIfPresent(editedAt, forKey: .editedAt)
+        try container.encodeIfPresent(provider?.rawValue, forKey: .provider)
+    }
 
     /// Dieselbe Zusammenfassung mit neuem Text. Leerraum am Rand wird entfernt; ein unveränderter
     /// Text gilt nicht als Bearbeitung, damit „Speichern“ ohne Änderung nichts markiert.

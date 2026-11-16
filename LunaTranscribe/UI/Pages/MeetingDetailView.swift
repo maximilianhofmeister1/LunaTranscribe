@@ -64,16 +64,16 @@ struct MeetingDetailView: View {
             Button("Neu zusammenfassen") { confirmCloudNoticeThenSummarize() }
             Button("Abbrechen", role: .cancel) {}
         } message: {
-            Text("Du hast diese Zusammenfassung bearbeitet. Eine neue Zusammenfassung von Claude ersetzt deine Änderungen.")
+            Text("Du hast diese Zusammenfassung bearbeitet. Eine neue Zusammenfassung ersetzt deine Änderungen.")
         }
-        .alert("Zusammenfassung mit Claude", isPresented: $showCloudNotice) {
+        .alert("Zusammenfassung mit \(provider.label)", isPresented: $showCloudNotice) {
             Button("Verstanden, zusammenfassen") {
-                state.settings.summaryCloudNoticeAccepted = true
+                state.settings.acceptSummaryCloudNotice(for: provider)
                 startSummary()
             }
             Button("Abbrechen", role: .cancel) {}
         } message: {
-            Text("Die Transkription bleibt lokal. Für die Zusammenfassung schickt LunaTranscribe den Text des Meetings über die Claude CLI an Anthropic – mit deinem Claude-Konto. Dieser Hinweis erscheint nur einmal.")
+            Text(provider.cloudNotice)
         }
         .confirmationDialog("„\(transcript.title)“ löschen?", isPresented: $confirmDelete) {
             Button("In den Papierkorb legen", role: .destructive) { delete() }
@@ -100,7 +100,7 @@ struct MeetingDetailView: View {
                 }
                 .toggleStyle(.button)
                 .buttonStyle(.lunaQuiet)
-                .help("Vertrauliche Meetings sieht Claude nicht (luna-mcp), sie landen nicht im Suchindex und werden nicht über Claude zusammengefasst.")
+                .help("Vertrauliche Meetings sieht Claude nicht (luna-mcp), sie landen nicht im Suchindex und werden nicht in der Cloud zusammengefasst.")
             }
             if let error = document.saveError {
                 Label(error, systemImage: "exclamationmark.triangle").font(LunaFont.caption(12)).foregroundStyle(LunaColor.rose)
@@ -213,10 +213,12 @@ struct MeetingDetailView: View {
         MeetingSummaryTab(document: document, draft: $summaryDraft)
     }
 
+    private var provider: SummaryProvider { state.settings.summaryProvider }
+
     private var summaryButtonHelp: String {
-        if transcript.confidential { return "Vertrauliche Meetings werden nicht an Claude geschickt." }
+        if transcript.confidential { return "Vertrauliche Meetings werden nicht in der Cloud zusammengefasst." }
         if isEditingSummary { return "Erst die Bearbeitung der Zusammenfassung sichern oder abbrechen." }
-        return "Fasst das Meeting über die Claude CLI zusammen (Text geht an Anthropic)"
+        return "Fasst das Meeting über die \(provider.cliName) zusammen (Text geht an \(provider.vendor))"
     }
 
     // MARK: Aktionen
@@ -228,7 +230,7 @@ struct MeetingDetailView: View {
     }
 
     private func confirmCloudNoticeThenSummarize() {
-        if state.settings.summaryCloudNoticeAccepted { startSummary() } else { showCloudNotice = true }
+        if state.settings.isSummaryCloudNoticeAccepted(for: provider) { startSummary() } else { showCloudNotice = true }
     }
 
     private func startSummary() {
