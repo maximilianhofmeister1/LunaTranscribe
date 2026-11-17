@@ -8,8 +8,8 @@ Claude Haiku über die Claude CLI – bereinigt das Diktat –
 Rechtschreibung, Grammatik, Füllwörter, Wiederholungen, Versprecher – bevor es eingefügt wird.
 Ein **eigenes Wörterbuch** sorgt dafür, dass Namen und Fachbegriffe richtig geschrieben werden – und **lernt aus deinen
 Korrekturen**. Meetings landen als JSON in einer **Meeting-Bibliothek** in einem frei wählbaren Ordner und lassen sich auf
-Knopfdruck über die **Claude CLI zusammenfassen** (neben der optionalen Claude-Haiku-Nachbearbeitung die einzige,
-freiwillige Ausnahme vom Local-First-Prinzip). Über den
+Knopfdruck über **Claude, Gemini oder ChatGPT zusammenfassen** – über deren CLI mit deinem eigenen Konto (neben der
+optionalen Claude-Haiku-Nachbearbeitung die einzige, freiwillige Ausnahme vom Local-First-Prinzip). Über den
 lokalen MCP-Server **luna-mcp** kann Claude die Meetings durchsuchen und lesen.
 
 Alles lebt im Infobereich; ein **Hauptfenster** (Übersicht, Meetings, Wörterbuch, Verlauf, Einstellungen) öffnest du über
@@ -147,7 +147,8 @@ Diktat mit 1–2 Sätzen auf einer 4-Kern-Laptop-CPU (Ryzen 5 3500U) – schnell
 Apple Intelligence aus der macOS-Version gibt es unter Windows nicht. Der feste Anfang des Prompts (Anweisung +
 Beispiele) wird nach dem Laden einmal vorberechnet; danach rechnet jedes Diktat nur noch seinen eigenen Teil.
 
-**Claude Haiku** nutzt dieselbe Claude CLI wie die Meeting-Zusammenfassung (Pfad: Einstellungen → Meetings) – ohne
+**Claude Haiku** nutzt dieselbe Claude CLI wie die Meeting-Zusammenfassung mit Claude (Pfad: Einstellungen → Meetings,
+Anbieter Claude) – ohne
 Werkzeuge, MCP-Server, Projekteinstellungen oder gespeicherte Sitzung, mit niedrigem Aufwand. Die Modell-ID ist bewusst
 explizit (ältere CLIs lösen den Alias `haiku` noch auf Haiku 4.5 auf, das deutlich langsamer ist). Die CLI startet bei
 jedem Diktat neu, deshalb dauert es länger als die Rechenzeit von Haiku – auf schwachen CPUs aber oft weniger als Qwen3.
@@ -233,15 +234,31 @@ TXT/Markdown gibt es als Export (mit oder ohne Zusammenfassung), dazu Kopieren, 
 - **Ordner nicht erreichbar** (externes Laufwerk ab): Neue Meetings landen vorübergehend in
   `%LOCALAPPDATA%\LunaTranscribe\Unsaved` und ziehen beim nächsten Einlesen automatisch um.
 
-### Zusammenfassung mit Claude
+### Zusammenfassung mit Claude, Gemini oder ChatGPT
 
-Im Meeting auf **Zusammenfassen** klicken: LunaTranscribe ruft die lokal installierte **Claude CLI** auf (`claude -p`,
-ohne Werkzeuge, ohne MCP, ohne Projektkontext, ohne gespeicherte Sitzung) und legt Kurzfassung, Themen, Entscheidungen,
-Aufgaben und offene Fragen im Tab „Zusammenfassung“ und als `summary.md` ab. Dauer je nach Länge 10–60 s.
+Im Meeting auf **Zusammenfassen** klicken: LunaTranscribe ruft die lokal installierte CLI des gewählten Anbieters auf
+(Einstellungen → Meetings → „Zusammenfassung“ → **Anbieter**) und legt Kurzfassung, Themen, Entscheidungen, Aufgaben
+und offene Fragen im Tab „Zusammenfassung“ und als `summary.md` ab. Dauer je nach Länge 10–60 s. Alle drei laufen mit
+deinem Konto bzw. Abo, ohne API-Schlüssel:
 
-- **Voraussetzung**: Claude CLI installiert und angemeldet (einmal `claude` starten und anmelden). Die App sucht sie in
-  `%USERPROFILE%\.local\bin`, bei npm (`%APPDATA%\npm`), unter Programme und im PATH; ein eigener Pfad und ein Modell
-  (z. B. `sonnet`) lassen sich unter Einstellungen → Meetings setzen, „Testen“ prüft Pfad und Version.
+| Anbieter | CLI | Aufruf | Installieren (PowerShell), dann anmelden |
+|---|---|---|---|
+| **Claude** (Anthropic) | Claude CLI | `claude -p`, ohne Werkzeuge, MCP, Projektkontext und gespeicherte Sitzung | `irm https://claude.ai/install.ps1 \| iex`, dann `claude` |
+| **Gemini** (Google) | Antigravity CLI (Nachfolger der Gemini CLI) | `agy` im leeren Ordner; Anweisung und Transkript gehen gemeinsam als Prompt über stdin (`--input-format stream-json`), weil `agy` keine eigene System-Anweisung kennt und Windows lange Befehlszeilen nicht erlaubt | `winget install Google.AntigravityCLI`, dann `agy` |
+| **ChatGPT** (OpenAI) | Codex CLI | `codex exec` mit Sandbox nur lesend, ohne Websuche, Nutzer-Konfiguration, AGENTS.md und gespeicherte Sitzung | `npm install -g @openai/codex`, dann `codex login` |
+
+Auch Gratis-Konten funktionieren, haben aber knappe Kontingente. Google nutzt Eingaben der Antigravity CLI
+standardmäßig zur Produktverbesserung (abschaltbar in deren Einstellungen), und `agy` behält jede Zusammenfassung samt
+Transkript in seinem eigenen Verlauf unter `%USERPROFILE%\.gemini\antigravity-cli` (lokal, lässt sich nicht abschalten);
+bei OpenAI gelten die Datenkontrollen deines ChatGPT-Kontos. Vor der ersten Zusammenfassung je Anbieter erscheint ein
+Hinweis, wohin der Text geht. Unter der Zusammenfassung steht, mit welchem Anbieter und Modell sie entstand.
+
+- **Voraussetzung**: Die CLI des gewählten Anbieters ist installiert und angemeldet (Tabelle oben). Die App sucht sie in
+  `%USERPROFILE%\.local\bin`, bei npm (`%APPDATA%\npm`, auch nvm-windows), winget, unter Programme und im PATH – auch im
+  aktuellen aus der Registry, sodass eine gerade installierte CLI ohne Neuanmeldung gefunden wird. Ein eigener Pfad und
+  ein Modell (z. B. `sonnet`, ein Name aus `agy models` oder ein Codex-Modell) lassen sich je Anbieter unter
+  Einstellungen → Meetings setzen, „Testen“ prüft Pfad und Version. Ist die CLI nicht angemeldet, bricht die App sofort
+  mit dem passenden Login-Befehl ab, statt auf eine Anmeldung im Hintergrund zu warten.
 - **Sprache**: Neben „Zusammenfassen“ wählbar, vorbelegt mit der Sprache einer vorhandenen Zusammenfassung, sonst mit
   dem Standard unter Einstellungen → Meetings → „Sprache“ („Wie das Meeting“ oder fest). Auch die Überschriften kommen in
   dieser Sprache; luna-mcp nutzt denselben Standard für den Prompt `meeting_summary`.
@@ -249,11 +266,13 @@ Aufgaben und offene Fragen im Tab „Zusammenfassung“ und als `summary.md` ab.
   „Abbrechen“ (Esc). Gespeichert wird in `meeting.json` und `summary.md`; „Neu zusammenfassen“ fragt vorher, ob die
   bearbeitete Fassung ersetzt werden soll. Themen erscheinen als fette Punkte mit eingerückten Unterpunkten.
 - **Anweisung**: Einstellungen → Meetings → „Anweisung für die Zusammenfassung“, frei editierbar.
-- **Local-First bleibt ehrlich**: Für die Zusammenfassung geht der Text des Meetings über dein Claude-Konto an Anthropic.
-  Beim ersten Mal erklärt ein Hinweis das. Vertrauliche Meetings (Schloss-Knopf) werden nie geschickt.
+- **Local-First bleibt ehrlich**: Für die Zusammenfassung geht der Text des Meetings über dein Konto an den gewählten
+  Anbieter (Anthropic, Google oder OpenAI). Vor dem ersten Mal je Anbieter erklärt ein Hinweis das. Vertrauliche
+  Meetings (Schloss-Knopf) werden nie geschickt.
 
 ```powershell
-LunaTranscribe.exe --summary-selftest "<Meeting-Ordner>\meeting.json" [--model sonnet] [--language en] [--cli <pfad\zu\claude.exe>]
+LunaTranscribe.exe --summary-selftest "<Meeting-Ordner>\meeting.json" [--provider claude|antigravity|codex] [--model sonnet] [--language en] [--cli <pfad\zur\cli>]
+LunaTranscribe.exe --summary-selftest --provider antigravity --repeat 300 --app   # langes Beispiel-Meeting wie der Button, prüft meeting.json
 ```
 
 ## Meetings in Claude (MCP)
@@ -318,7 +337,8 @@ liefert im App-Ordner eine andere `onnxruntime.dll` (1.28). Im Unterordner `mcp\
 - Der Rohtext eines Diktats mit Nachbearbeitung geht nur in das lokale Sprachmodell auf diesem PC – außer du wählst
   Claude Haiku, dann geht er über die Claude CLI an Anthropic.
 - Keine Analytics, kein Account. Netzwerk nur für die einmaligen Modell-Downloads (ASR, Sprecher, Sprachmodell, optional
-  Embedding-Modell) – und, **nur auf Klick**, für eine Meeting-Zusammenfassung über die Claude CLI. Was Claude über
+  Embedding-Modell) – und, **nur auf Klick**, für eine Meeting-Zusammenfassung über die Claude, Antigravity oder Codex
+  CLI (Text an Anthropic, Google oder OpenAI). Was Claude über
   luna-mcp liest, siehe oben – nur nach Freigabe.
 - Wörterbuch und gelernte Vorschläge liegen in `%APPDATA%\LunaTranscribe\settings.json`, nicht in der Cloud.
 - „Letzte Diktate“ (Verlauf) leben nur im Arbeitsspeicher (abschaltbar unter Einstellungen → Datenschutz).
@@ -366,7 +386,7 @@ LunaTranscribe.exe --diarize-selftest dialog.wav [--speakers 2]    # Sprecher + 
 LunaTranscribe.exe --meeting-selftest 20                           # 20 s Mikrofon + Systemaudio aufnehmen und verarbeiten
 LunaTranscribe.exe --queue-selftest a.wav b.wav [--fake]           # Hintergrund-Verarbeitung, Neustart, Verwerfen
 LunaTranscribe.exe --recovery-selftest                             # Rettung abgebrochener Aufnahmen (ohne Mikrofon)
-LunaTranscribe.exe --summary-selftest meeting.json                 # Achtung: Text geht an Anthropic
+LunaTranscribe.exe --summary-selftest meeting.json --provider codex # Achtung: Text geht an den Anbieter
 LunaTranscribe.exe --make-icon LunaTranscribe.ico [vorschau.png]   # App-Icon aus dem Code zeichnen
 ```
 
@@ -385,7 +405,8 @@ LunaTranscribe/        WPF-App (net8.0-windows)
   Refine/              RefinerKind, RefinePrompt, LlamaRefiner, RefinerManager, RefineSelfTest
   Search/              SearchIndexer (luna-mcp --index), ClaudeConnection, ClaudeActivity
   Settings/            SettingsStore (JSON + Autostart), HotkeyRecorder, DailyDictationStats
-  Summary/             ClaudeCli, MeetingSummarizer, SummarySelfTest
+  Summary/             ISummaryCli, CliProcess (Suchen + Prozessaufruf), ClaudeCli, AntigravityCli, CodexCli,
+                       MeetingSummarizer, SummarySelfTest
   UI/Theme/            Mondnacht: LunaTheme (Farben hell/dunkel), Styles.xaml, Bausteine, LunaIcon, AppIconArt
   UI/MainWindow/       Hauptfenster (eigene Titelleiste, Seitenleiste), MainRouter
   UI/Pages/            Übersicht, Meetings (+ Detail), Wörterbuch, Verlauf, Settings/ (ein Bereich pro Datei)

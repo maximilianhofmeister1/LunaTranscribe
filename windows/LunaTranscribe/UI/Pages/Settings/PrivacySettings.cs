@@ -78,16 +78,17 @@ public sealed class PrivacySettings : SettingsSectionView
                 Text = "Diktat-Audio bleibt ausschließlich im Arbeitsspeicher und wird direkt nach der Transkription verworfen. "
                        + "Meeting-Aufnahmen liegen während der Verarbeitung temporär unter %LOCALAPPDATA%\\LunaTranscribe und werden "
                        + "danach gelöscht (außer „Aufnahme behalten“). Transkripte liegen als JSON in deinem Meeting-Ordner. Ausnahmen "
-                       + "vom Local-First-Prinzip sind nur die freiwillige Zusammenfassung über die Claude CLI, die Nachbearbeitung "
+                       + "vom Local-First-Prinzip sind nur die freiwillige Zusammenfassung über die Claude, Antigravity oder Codex CLI, die Nachbearbeitung "
                        + "mit Claude Haiku (wenn du sie wählst) und – wenn du sie freigibst – Meetings, die Claude über luna-mcp liest.",
             },
             s.IgnoredSuggestionKeys.Count > 0
                 ? Row("Ignorierte Wörterbuch-Vorschläge", $"{s.IgnoredSuggestionKeys.Count} Korrekturen werden nicht mehr vorgeschlagen.",
                       Button("Zurücksetzen", () => { s.IgnoredSuggestionKeys = new List<string>(); Rebuild(); }))
                 : null,
-            s.SummaryCloudNoticeAccepted
-                ? Row("Cloud-Hinweis für Zusammenfassungen", "Wurde bestätigt.",
-                      Button("Wieder anzeigen", () => { s.SummaryCloudNoticeAccepted = false; Rebuild(); }))
+            s.SummaryCloudNoticesAccepted.Count > 0
+                ? Row("Cloud-Hinweis für Zusammenfassungen",
+                      $"Bestätigt für {string.Join(", ", s.SummaryCloudNoticesAccepted.Select(p => p.Label()))}.",
+                      Button("Wieder anzeigen", () => { s.ResetSummaryCloudNotices(); Rebuild(); }))
                 : null));
 
         root.Children.Add(ClaudeCard());

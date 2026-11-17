@@ -5,13 +5,14 @@ using System.Windows;
 using System.Windows.Controls;
 using LunaCore;
 using LunaTranscribe.Core;
+using LunaTranscribe.Summary;
 using LunaTranscribe.UI.Components;
 using LunaTranscribe.UI.Theme;
 using Microsoft.Win32;
 
 namespace LunaTranscribe.UI.Pages.Settings;
 
-/// <summary>Einstellungen → Meetings (Pendant zu MeetingSettings.swift): Ordner, Aufnahme, Zusammenfassung mit Claude.</summary>
+/// <summary>Einstellungen → Meetings (Pendant zu MeetingSettings.swift): Ordner, Aufnahme, Zusammenfassung über Claude, Gemini oder ChatGPT.</summary>
 public sealed class MeetingSettings : SettingsSectionView
 {
     // Überstehen einen Neuaufbau des Bereichs.
@@ -59,16 +60,25 @@ public sealed class MeetingSettings : SettingsSectionView
                        "Standard-Ausgabegerät mitgeschnitten (WASAPI-Loopback) – dafür braucht Windows keine eigene Berechtigung.",
             }));
 
-        // Zusammenfassung mit Claude
-        var cliPath = new TextBox { Text = s.ClaudeCliPath, Width = 220 };
+        // Zusammenfassung (Claude, Antigravity oder Codex CLI)
+        var provider = s.SummaryProvider;
+        var providerPicker = Segmented(SummaryProviderExtensions.All, provider, p => p.Label(), v =>
+        {
+            s.SummaryProvider = v;
+            _cliCheck = null;
+            Rebuild();
+        });
+
+        var cliPath = new TextBox { Text = s.CliPath(provider), Width = 220 };
         Luna.SetPlaceholder(cliPath, "automatisch");
-        cliPath.TextChanged += (_, _) => Quietly(() => s.ClaudeCliPath = cliPath.Text);
+        cliPath.TextChanged += (_, _) => Quietly(() => s.SetCliPath(provider, cliPath.Text));
         var test = Button(_checking ? "Prüfe…" : "Testen", CheckCli);
         test.IsEnabled = !_checking;
 
-        var model = new TextBox { Text = s.ClaudeModel, Width = 220 };
+        // Ungetrimmt lesen, sonst springt der Cursor beim Tippen eines Leerzeichens.
+        var model = new TextBox { Text = s.RawModel(provider), Width = 220 };
         Luna.SetPlaceholder(model, "Standard");
-        model.TextChanged += (_, _) => Quietly(() => s.ClaudeModel = model.Text);
+        model.TextChanged += (_, _) => Quietly(() => s.SetModel(provider, model.Text));
 
         var prompt = new VStack { Spacing = 6 };
         prompt.Children.Add(new TextBlock { Text = "Anweisung für die Zusammenfassung", FontSize = 13.5 }.Styled("Luna.Text"));
@@ -80,18 +90,20 @@ public sealed class MeetingSettings : SettingsSectionView
         var summaryLanguage = Picker(languages, s.SummaryLanguage,
             l => l.Fixed is { } fixedLanguage ? fixedLanguage.DisplayName() : "Wie das Meeting", v => s.SummaryLanguage = v, 220);
 
-        root.Children.Add(Card("Zusammenfassung mit Claude", IconKind.Sparkles,
-            CloudNote(),
-            Row("Claude CLI", @"Leer = automatisch suchen (.local\bin im Benutzerordner, npm, Programme, PATH).", cliPath, test),
+        root.Children.Add(Card("Zusammenfassung", IconKind.Sparkles,
+            CloudNote(provider),
+            Row("Anbieter", "Läuft über die CLI des Anbieters mit deinem Konto bzw. Abo – kein API-Schlüssel nötig.", providerPicker),
+            Row(provider.CliName(), provider.PathHint(), cliPath, test),
             _cliCheck != null ? CheckResult() : null,
-            Row("Modell", "Alias wie „sonnet“ oder „opus“; leer = Standard der CLI.", model),
+            Row("Modell", provider.ModelHint(), model),
+            provider.DataUse() is { } dataUse ? Hint(dataUse) : null,
             Row("Sprache", "Standard für neue Zusammenfassungen; im Meeting für die nächste Zusammenfassung änderbar.", summaryLanguage),
             prompt));
     }
 
     private static string SpeakerCountLabel(int count) => count == 0 ? "Automatisch" : $"{count} Personen";
 
-    private static FrameworkElement CloudNote()
+    private static FrameworkElement CloudNote(SummaryProvider provider)
     {
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -100,7 +112,7 @@ public sealed class MeetingSettings : SettingsSectionView
             .Brushed(LunaIcon.ForegroundProperty, "Luna.InkMuted"));
         var text = new TextBlock
         {
-            Text = "Die Transkription bleibt lokal. Nur wenn du bei einem Meeting „Zusammenfassen“ klickst, geht dessen Text über die Claude CLI an Anthropic.",
+            Text = $"Die Transkription bleibt lokal. Nur wenn du bei einem Meeting „Zusammenfassen“ klickst, geht dessen Text über die {provider.CliName()} an {provider.Vendor()}.",
         }.Styled("Luna.Caption");
         Grid.SetColumn(text, 1);
         grid.Children.Add(text);
@@ -115,7 +127,12 @@ public sealed class MeetingSettings : SettingsSectionView
         var brush = _cliCheckFailed ? "Luna.Rose" : "Luna.Sage";
         grid.Children.Add(new LunaIcon { Kind = _cliCheckFailed ? IconKind.ErrorCircle : IconKind.CheckCircle, Size = 13, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 8, 0) }
             .Brushed(LunaIcon.ForegroundProperty, brush));
-        var text = new TextBlock { Text = _cliCheck }.Styled("Luna.Caption").Brushed(TextBlock.ForegroundProperty, brush);
+        // Auswählbar, damit Pfad oder Fehlermeldung kopiert werden können.
+        var text = new TextBox
+        {
+            Text = _cliCheck, IsReadOnly = true, BorderThickness = new Thickness(0), Background = System.Windows.Media.Brushes.Transparent,
+            Padding = new Thickness(0), TextWrapping = TextWrapping.Wrap, FontSize = 12,
+        }.Brushed(TextBox.ForegroundProperty, brush);
         Grid.SetColumn(text, 1);
         grid.Children.Add(text);
         return grid;
@@ -126,10 +143,11 @@ public sealed class MeetingSettings : SettingsSectionView
     private async void CheckCli()
     {
         _checking = true;
+        var provider = State.Settings.SummaryProvider;
         Rebuild();
         try
         {
-            _cliCheck = "Gefunden: " + await State.Summarizer.CheckCliAsync();
+            _cliCheck = "Gefunden: " + await State.Summarizer.CheckCliAsync(provider);
             _cliCheckFailed = false;
         }
         catch (Exception ex)

@@ -10,6 +10,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using LunaCore;
+using LunaTranscribe.Summary;
 using LunaTranscribe.Core;
 using LunaTranscribe.Meeting;
 using LunaTranscribe.UI.Components;
@@ -188,7 +189,7 @@ public sealed class MeetingDetailView : UserControl
         var confidential = new ToggleButton
         {
             Content = "Vertraulich", IsChecked = t.Confidential, VerticalAlignment = VerticalAlignment.Center,
-            ToolTip = "Vertrauliche Meetings sieht Claude nicht (luna-mcp), sie landen nicht im Suchindex und werden nicht über Claude zusammengefasst.",
+            ToolTip = "Vertrauliche Meetings sieht Claude nicht (luna-mcp), sie landen nicht im Suchindex und werden nicht in der Cloud zusammengefasst.",
         }.Styled("Luna.ToggleQuiet");
         Luna.SetIcon(confidential, t.Confidential ? IconKind.Lock : IconKind.Unlock);
         confidential.Click += (_, _) => _doc.SetConfidential(confidential.IsChecked == true);
@@ -229,9 +230,10 @@ public sealed class MeetingDetailView : UserControl
             Luna.SetIcon(summarize, IconKind.Sparkles);
             // Deaktivierte Knöpfe zeigen ihren Tooltip nur so.
             ToolTipService.SetShowOnDisabled(summarize, true);
-            summarize.ToolTip = t.Confidential ? "Vertrauliche Meetings werden nicht an Claude geschickt."
+            var provider = _state.Settings.SummaryProvider;
+            summarize.ToolTip = t.Confidential ? "Vertrauliche Meetings werden nicht in der Cloud zusammengefasst."
                 : IsEditingSummary ? "Erst die Bearbeitung der Zusammenfassung sichern oder abbrechen."
-                : "Fasst das Meeting über die Claude CLI zusammen (Text geht an Anthropic)";
+                : $"Fasst das Meeting über die {provider.CliName()} zusammen (Text geht an {provider.Vendor()})";
             summarize.Click += (_, _) => RequestSummary();
             left.Children.Add(summarize);
             left.Children.Add(SummaryLanguageButton());
@@ -336,19 +338,18 @@ public sealed class MeetingDetailView : UserControl
         if (Transcript.Summary?.IsEdited == true)
         {
             var replace = LunaDialog.Confirm(this, "Bearbeitete Zusammenfassung ersetzen?",
-                "Du hast diese Zusammenfassung bearbeitet. Eine neue Zusammenfassung von Claude ersetzt deine Änderungen.",
+                "Du hast diese Zusammenfassung bearbeitet. Eine neue Zusammenfassung ersetzt deine Änderungen.",
                 "Neu zusammenfassen");
             if (!replace) return;
         }
-        if (!_state.Settings.SummaryCloudNoticeAccepted)
+        var provider = _state.Settings.SummaryProvider;
+        if (!_state.Settings.IsSummaryCloudNoticeAccepted(provider))
         {
-            var choice = LunaDialog.Show(this, "Zusammenfassung mit Claude",
-                "Die Transkription bleibt lokal. Für die Zusammenfassung schickt LunaTranscribe den Text des Meetings über die " +
-                "Claude CLI an Anthropic – mit deinem Claude-Konto. Dieser Hinweis erscheint nur einmal.",
+            var choice = LunaDialog.Show(this, $"Zusammenfassung mit {provider.Label()}", provider.CloudNotice(),
                 new DialogButton("Verstanden, zusammenfassen", "Luna.Primary", IsDefault: true),
                 new DialogButton("Abbrechen"));
             if (choice != 0) return;
-            _state.Settings.SummaryCloudNoticeAccepted = true;
+            _state.Settings.AcceptSummaryCloudNotice(provider);
         }
         _doc.Flush();   // aktuelle Namen/Korrekturen mitschicken
         _state.Summarizer.Summarize(_doc.Transcript, SummaryLanguage);
@@ -457,11 +458,11 @@ public sealed class MeetingDetailView : UserControl
         if (_state.Summarizer.Error(_doc.Id) is { } error)
             stack.Children.Add(new LunaCard { Content = IconLine(error, IconKind.ErrorCircle, "Luna.Rose") });
 
-        if (IsSummarizing)
+        if (_state.Summarizer.RunningProvider(_doc.Id) is { } runningProvider)
         {
             var row = new HStack { Spacing = 10 };
             row.Children.Add(new Spinner { Width = 14, Height = 14, VerticalAlignment = VerticalAlignment.Center });
-            row.Children.Add(new TextBlock { Text = "Claude fasst das Meeting zusammen … das dauert je nach Länge 10–60 Sekunden.", VerticalAlignment = VerticalAlignment.Center }
+            row.Children.Add(new TextBlock { Text = $"{runningProvider.Label()} fasst das Meeting zusammen … das dauert je nach Länge 10–60 Sekunden.", VerticalAlignment = VerticalAlignment.Center }
                 .Styled("Luna.TextMuted"));
             stack.Children.Add(new LunaCard { Content = row });
         }
@@ -476,8 +477,9 @@ public sealed class MeetingDetailView : UserControl
             content.Children.Add(new SectionTitle { Title = "Noch keine Zusammenfassung", Icon = IconKind.Sparkles });
             content.Children.Add(new TextBlock
             {
-                Text = "„Zusammenfassen“ schickt das Transkript über die Claude CLI an Claude und legt Kurzfassung, Themen, Entscheidungen, " +
-                       "Aufgaben und offene Fragen hier ab. Die Sprache wählst du daneben, Standard und Anweisung unter Einstellungen → Meetings.",
+                Text = $"„Zusammenfassen“ schickt das Transkript über die {_state.Settings.SummaryProvider.CliName()} an {_state.Settings.SummaryProvider.Label()} " +
+                       "und legt Kurzfassung, Themen, Entscheidungen, Aufgaben und offene Fragen hier ab. Die Sprache wählst du daneben, " +
+                       "Anbieter, Standard und Anweisung unter Einstellungen → Meetings.",
             }.Styled("Luna.Hint"));
             var adjust = new Button { Content = "Einstellungen öffnen…", HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(-6, 0, 0, 0) }.Styled("Luna.Quiet");
             adjust.Click += (_, _) => _state.OpenSettings(SettingsSection.Meetings);
@@ -595,7 +597,7 @@ public sealed class MeetingDetailView : UserControl
     internal static string Origin(MeetingSummary summary)
     {
         var model = summary.Model is { Length: > 0 } m ? $" ({m})" : "";
-        var parts = new List<string> { $"Erstellt {LunaDates.DateTime(summary.CreatedAt)} mit Claude{model}" };
+        var parts = new List<string> { $"Erstellt {LunaDates.DateTime(summary.CreatedAt)} mit {summary.ResolvedProvider.Label()}{model}" };
         if (summary.Language is { } language) parts.Add(language.DisplayName());
         if (summary.EditedAt is { } edited) parts.Add($"bearbeitet {LunaDates.DateTime(edited)}");
         return string.Join(" · ", parts);
