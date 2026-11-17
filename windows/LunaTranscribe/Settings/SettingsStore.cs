@@ -72,12 +72,21 @@ public sealed class SettingsStore : INotifyPropertyChanged
         public bool MeetingKeepAudio { get; set; }
         public string MeetingFolder { get; set; } = "";
         public int MeetingSpeakerCount { get; set; }
+        /// <summary>Rohwert von <see cref="LunaCore.SummaryProvider"/> („claude“, „antigravity“, „codex“).</summary>
+        public string SummaryProvider { get; set; } = "claude";
         public string ClaudeCliPath { get; set; } = "";
         public string ClaudeModel { get; set; } = "";
+        public string AntigravityCliPath { get; set; } = "";
+        public string AntigravityModel { get; set; } = "";
+        public string CodexCliPath { get; set; } = "";
+        public string CodexModel { get; set; } = "";
         public string SummaryPrompt { get; set; } = "";
         /// <summary>„meeting“ oder Sprachcode – Schlüssel auch in LunaCore.SharedSettings.Key (luna-mcp).</summary>
         public string SummaryLanguage { get; set; } = "meeting";
+        /// <summary>Bis 1.2: ein Schalter für den Claude-Hinweis; wird beim Laden in <see cref="SummaryCloudNoticesAccepted"/> übernommen.</summary>
         public bool SummaryCloudNoticeAccepted { get; set; }
+        /// <summary>Anbieter (Rohwerte), deren einmaliger Hinweis „Text geht an …“ bestätigt wurde.</summary>
+        public List<string> SummaryCloudNoticesAccepted { get; set; } = new();
 
         // Nachbearbeitung
         public string RefinerKind { get; set; } = "";
@@ -117,7 +126,16 @@ public sealed class SettingsStore : INotifyPropertyChanged
         {
             Log.Write("settings load failed: " + ex.Message);
         }
-        return new SettingsStore(d ?? new Data());
+        d ??= new Data();
+        d.SummaryCloudNoticesAccepted ??= new();
+        // Bis 1.2 gab es nur Claude und einen einzelnen Schalter für dessen Hinweis.
+        if (d.SummaryCloudNoticeAccepted)
+        {
+            var claude = LunaCore.SummaryProvider.Claude.RawValue();
+            if (!d.SummaryCloudNoticesAccepted.Contains(claude)) d.SummaryCloudNoticesAccepted.Add(claude);
+            d.SummaryCloudNoticeAccepted = false;
+        }
+        return new SettingsStore(d);
     }
 
     private void Save()
@@ -238,11 +256,70 @@ public sealed class SettingsStore : INotifyPropertyChanged
     /// <summary>Erwartete Teilnehmerzahl für die Sprechererkennung; 0 = automatisch.</summary>
     public int MeetingSpeakerCount { get => _d.MeetingSpeakerCount; set => Set(_d.MeetingSpeakerCount, Math.Clamp(value, 0, 8), v => _d.MeetingSpeakerCount = v); }
 
-    /// <summary>Eigener Pfad zur Claude CLI; "" = automatisch suchen.</summary>
+    // MARK: Zusammenfassung (Claude, Antigravity oder Codex CLI)
+
+    /// <summary>Über welche CLI Meetings zusammengefasst werden.</summary>
+    public SummaryProvider SummaryProvider
+    {
+        get => SummaryProviderExtensions.FromRawValue(_d.SummaryProvider) ?? SummaryProvider.Claude;
+        set => Set(_d.SummaryProvider, value.RawValue(), v => _d.SummaryProvider = v);
+    }
+
+    /// <summary>Eigener Pfad zur Claude CLI; "" = automatisch suchen. Auch für die Nachbearbeitung mit Claude Haiku.</summary>
     public string ClaudeCliPath { get => _d.ClaudeCliPath; set => Set(_d.ClaudeCliPath, value ?? "", v => _d.ClaudeCliPath = v); }
 
     /// <summary>Modell für Zusammenfassungen (z. B. „sonnet“); "" = Standard der CLI.</summary>
     public string ClaudeModel { get => _d.ClaudeModel; set => Set(_d.ClaudeModel, value ?? "", v => _d.ClaudeModel = v); }
+
+    /// <summary>Eigener Pfad zur Antigravity CLI (<c>agy</c>); "" = automatisch suchen.</summary>
+    public string AntigravityCliPath { get => _d.AntigravityCliPath; set => Set(_d.AntigravityCliPath, value ?? "", v => _d.AntigravityCliPath = v); }
+
+    /// <summary>Modell für <c>agy --model</c> (siehe <c>agy models</c>); "" = Standard der CLI.</summary>
+    public string AntigravityModel { get => _d.AntigravityModel; set => Set(_d.AntigravityModel, value ?? "", v => _d.AntigravityModel = v); }
+
+    /// <summary>Eigener Pfad zur Codex CLI; "" = automatisch suchen.</summary>
+    public string CodexCliPath { get => _d.CodexCliPath; set => Set(_d.CodexCliPath, value ?? "", v => _d.CodexCliPath = v); }
+
+    /// <summary>Modell für <c>codex exec --model</c>; "" = Standard der CLI.</summary>
+    public string CodexModel { get => _d.CodexModel; set => Set(_d.CodexModel, value ?? "", v => _d.CodexModel = v); }
+
+    public string CliPath(SummaryProvider provider) => provider switch
+    {
+        SummaryProvider.Antigravity => AntigravityCliPath,
+        SummaryProvider.Codex => CodexCliPath,
+        _ => ClaudeCliPath,
+    };
+
+    public void SetCliPath(SummaryProvider provider, string path)
+    {
+        switch (provider)
+        {
+            case SummaryProvider.Antigravity: AntigravityCliPath = path; break;
+            case SummaryProvider.Codex: CodexCliPath = path; break;
+            default: ClaudeCliPath = path; break;
+        }
+    }
+
+    /// <summary>Eingestelltes Modell, wie getippt (für das Eingabefeld).</summary>
+    public string RawModel(SummaryProvider provider) => provider switch
+    {
+        SummaryProvider.Antigravity => AntigravityModel,
+        SummaryProvider.Codex => CodexModel,
+        _ => ClaudeModel,
+    };
+
+    /// <summary>Eingestelltes Modell ohne Leerraum; "" = Standard der CLI.</summary>
+    public string Model(SummaryProvider provider) => RawModel(provider).Trim();
+
+    public void SetModel(SummaryProvider provider, string model)
+    {
+        switch (provider)
+        {
+            case SummaryProvider.Antigravity: AntigravityModel = model; break;
+            case SummaryProvider.Codex: CodexModel = model; break;
+            default: ClaudeModel = model; break;
+        }
+    }
 
     /// <summary>Anweisung für Zusammenfassungen; gespeichert wird nur eine Abweichung vom Standard ("" = Standard).</summary>
     public string SummaryPrompt
@@ -263,7 +340,26 @@ public sealed class SettingsStore : INotifyPropertyChanged
         set => Set(_d.SummaryLanguage, value.RawValue, v => _d.SummaryLanguage = v);
     }
 
-    public bool SummaryCloudNoticeAccepted { get => _d.SummaryCloudNoticeAccepted; set => Set(_d.SummaryCloudNoticeAccepted, value, v => _d.SummaryCloudNoticeAccepted = v); }
+    /// <summary>Anbieter, deren einmaliger Hinweis „Text geht an …“ bestätigt wurde.</summary>
+    public IReadOnlyList<SummaryProvider> SummaryCloudNoticesAccepted =>
+        SummaryProviderExtensions.All.Where(p => _d.SummaryCloudNoticesAccepted.Contains(p.RawValue())).ToList();
+
+    public bool IsSummaryCloudNoticeAccepted(SummaryProvider provider) => _d.SummaryCloudNoticesAccepted.Contains(provider.RawValue());
+
+    public void AcceptSummaryCloudNotice(SummaryProvider provider)
+    {
+        if (IsSummaryCloudNoticeAccepted(provider)) return;
+        _d.SummaryCloudNoticesAccepted.Add(provider.RawValue());
+        Changed(nameof(SummaryCloudNoticesAccepted));
+    }
+
+    /// <summary>Alle Cloud-Hinweise wieder anzeigen (Einstellungen → Datenschutz).</summary>
+    public void ResetSummaryCloudNotices()
+    {
+        if (_d.SummaryCloudNoticesAccepted.Count == 0) return;
+        _d.SummaryCloudNoticesAccepted.Clear();
+        Changed(nameof(SummaryCloudNoticesAccepted));
+    }
 
     // MARK: Nachbearbeitung
 

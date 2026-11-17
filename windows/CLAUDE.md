@@ -9,7 +9,19 @@ Swift/SwiftUI). Same features, same structure, same design („Mondnacht“). Tr
 local transcription with Parakeet TDT v3 / Cohere Transcribe via sherpa-onnx → paste into the active app), plus
 meeting mode, refine hotkey (local LLM via llama.cpp, or opt-in Claude Haiku 5.5 via the Claude CLI: `ClaudeRefiner`,
 `--model claude-haiku-5-5 --effort low`, 30 s timeout, „not logged in“ → `RefineOutcome.Unavailable` with the reason in the
-overlay), custom + learning vocabulary, meeting library with Claude CLI summaries (editable, per-meeting language via
+overlay), custom + learning vocabulary, meeting library with summaries via the Claude, Antigravity (`agy`, Gemini) or Codex
+(ChatGPT) CLI (`LunaCore.SummaryProvider`, setting `SummaryProvider`, per-provider path + model; `Summary/ISummaryCli` with
+`ClaudeCli`/`AntigravityCli`/`CodexCli` on the shared `CliProcess`: locate incl. winget packages, nvm-windows and the
+current registry PATH, `.cmd` shims resolved to node + script, empty temp work dir, aborts at once on a login prompt
+(`agy -p` would wait 60 s) or `401 Unauthorized` on stderr (codex retries ~25 s); `CodexCli` checks `codex login status`
+first. Unlike macOS, `agy` gets instructions + transcript as one NDJSON message on stdin (`--input-format stream-json
+--output-format stream-json`, `{"event":"user","message":{"content":…}}`, answer = `response` of the last `result` event,
+exit code is 0 even on errors): Windows caps the command line at 32 767 chars (an hour-long meeting is ~70k) and `agy -p`
+ignores stdin. Pure text logic (error essence, codex TOML string, agy prompt/NDJSON) is `LunaCore.SummaryCliText` with
+tests. `MeetingSummary.provider` optional, unknown values read as null; cloud notice per provider in
+`SummaryCloudNoticesAccepted`, migrated from the 1.2 bool. Check with `--summary-selftest --provider … [--repeat n] [--app]`
+(`--app` = through `MeetingSummarizer` into a temp library, checks meeting.json/summary.md; verified 2026-11-17 with
+claude 2.1.322, agy 1.5.10 via winget, codex-cli 0.169.0 via npm, incl. 11 100 words) (editable, per-meeting language via
 `SummaryLanguage`, default in settings key `SummaryLanguage` shared with luna-mcp; rendered via `LunaCore.MarkdownBlock`
 with nested list depth),
 main window (Übersicht, Meetings, Wörterbuch, Verlauf, Einstellungen) and the local MCP server `luna-mcp`.

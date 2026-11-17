@@ -51,15 +51,15 @@ public sealed class ClaudeRefiner : ITextRefiner
         progress(0.3);
         // Locate fragt im Zweifel „where claude“ – nicht auf dem UI-Thread.
         var found = await Task.Run(() => ClaudeCli.Locate(_customPath()), ct)
-                    ?? throw new RefinerException(RefineOutcome.Unavailable, ClaudeCliException.NotFound().Message);
+                    ?? throw new RefinerException(RefineOutcome.Unavailable, CliException.NotFound(SummaryProvider.Claude).Message);
         progress(0.6);
         string version;
-        try { version = await found.VersionAsync(ct); }
-        catch (ClaudeCliException ex) { throw new RefinerException(RefineOutcome.Unavailable, ex.Message, ex); }
+        try { version = await found.Process.VersionAsync(ct); }
+        catch (CliException ex) { throw new RefinerException(RefineOutcome.Unavailable, ex.Message, ex); }
         ct.ThrowIfCancellationRequested();
         _cli = found;
         progress(1.0);
-        Log.Write($"Claude CLI ready: {version.Trim()} ({found.Executable})");
+        Log.Write($"Claude CLI ready: {version.Trim()} ({found.Process.Executable})");
     }
 
     /// <summary>Kein Prompt-Cache – jeder Aufruf schickt die ganze Anweisung.</summary>
@@ -79,16 +79,16 @@ public sealed class ClaudeRefiner : ITextRefiner
         {
             raw = await cli.CompleteAsync(system, RefinePrompt.UserMessage(text), Model, Effort, Timeout, ct);
         }
-        catch (ClaudeCliException ex) when (ex.Kind == ClaudeCliErrorKind.TimedOut)
+        catch (CliException ex) when (ex.Kind == CliErrorKind.TimedOut)
         {
             throw RefinerException.Timeout();
         }
-        catch (ClaudeCliException ex) when (ex.IsNotLoggedIn)
+        catch (CliException ex) when (ex.IsNotLoggedIn)
         {
             // Kurz halten – der Grund erscheint im Overlay.
             throw new RefinerException(RefineOutcome.Unavailable, "Claude CLI nicht angemeldet (im Terminal „claude“ starten)", ex);
         }
-        catch (ClaudeCliException ex)
+        catch (CliException ex)
         {
             throw new RefinerException(RefineOutcome.Unavailable, ex.Message, ex);
         }

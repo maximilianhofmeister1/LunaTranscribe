@@ -42,6 +42,7 @@ public static class UISnapshotSelfTest
         var savedVocabulary = settings.VocabularyState;
         var savedVocabularyEnabled = settings.VocabularyEnabled;
         var savedKeepHistory = settings.KeepHistory;
+        var savedProvider = settings.SummaryProvider;
         try
         {
             settings.KeepHistory = true;
@@ -62,6 +63,7 @@ public static class UISnapshotSelfTest
             settings.VocabularyState = savedVocabulary;
             settings.VocabularyEnabled = savedVocabularyEnabled;
             settings.KeepHistory = savedKeepHistory;
+            settings.SummaryProvider = savedProvider;
             AppPaths.DataDirectoryOverride = null;
             MeetingDetailView.StartOnSummaryTab = false;
             MeetingDetailView.StartEditingSummary = false;
@@ -96,6 +98,17 @@ public static class UISnapshotSelfTest
                         state.Router.SettingsSection = section;
                         await Save(win, Path.Combine(dir, $"{mode}-einstellungen-{section.ToString().ToLowerInvariant()}.png"));
                     }
+                    // Die Karte „Zusammenfassung“ liegt unterhalb des Fensters – je Anbieter in voller Höhe.
+                    var chosenProvider = state.Settings.SummaryProvider;
+                    state.Router.SettingsSection = SettingsSection.Meetings;
+                    win.Height = 1500;
+                    foreach (var provider in SummaryProviderExtensions.All)
+                    {
+                        state.Settings.SummaryProvider = provider;
+                        await Save(win, Path.Combine(dir, $"{mode}-einstellungen-zusammenfassung-{provider.RawValue()}.png"));
+                    }
+                    win.Height = 700;
+                    state.Settings.SummaryProvider = chosenProvider;
                 }
                 else
                 {
@@ -178,7 +191,8 @@ public static class UISnapshotSelfTest
                 "",
                 "## Aufgaben",
                 "- [ ] Markus: Testbericht und weclapp-Export schicken (Freitag)",
-                "- [x] Anna: Termin im Kalender verschieben"), DateTime.UtcNow.AddMinutes(-30), "sonnet", AppLanguage.German, DateTime.UtcNow),
+                "- [x] Anna: Termin im Kalender verschieben"), DateTime.UtcNow.AddMinutes(-30), "gemini-3.8-flash-medium", AppLanguage.German,
+                DateTime.UtcNow, SummaryProvider.Antigravity),
         };
 
         var standup = new MeetingTranscript(DateTime.UtcNow.AddDays(-2), 912, EngineKind.Parakeet, AppLanguage.German,

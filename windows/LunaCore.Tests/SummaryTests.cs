@@ -91,6 +91,41 @@ public class SummaryTests
         Assert.Equal(full, JsonCoding.Decode<MeetingSummary>(json));
     }
 
+    [Fact(DisplayName = "Anbieter: fehlt = Claude, unbekannt macht das Meeting nicht unlesbar, Bearbeiten behält ihn")]
+    public void ProviderCoding()
+    {
+        var legacy = JsonCoding.Decode<MeetingSummary>("""{"markdown":"Kurz.","createdAt":"2026-09-21T10:00:00Z"}""");
+        Assert.Null(legacy.Provider);
+        Assert.Equal(SummaryProvider.Claude, legacy.ResolvedProvider);
+        Assert.DoesNotContain("provider", JsonCoding.Encode(legacy));
+
+        var future = JsonCoding.Decode<MeetingSummary>("""{"markdown":"Kurz.","createdAt":"2026-09-21T10:00:00Z","provider":"ollama"}""");
+        Assert.Null(future.Provider);
+        var odd = JsonCoding.Decode<MeetingSummary>("""{"markdown":"Kurz.","createdAt":"2026-09-21T10:00:00Z","provider":{"x":1}}""");
+        Assert.Null(odd.Provider);
+
+        var codex = new MeetingSummary("Kurz.", Support.SampleDate, provider: SummaryProvider.Codex);
+        var encoded = JsonCoding.Encode(codex);
+        Assert.Contains("\"provider\" : \"codex\"", encoded);
+        Assert.Equal(codex, JsonCoding.Decode<MeetingSummary>(encoded));
+        Assert.Equal(SummaryProvider.Codex, codex.Revised("Neu.").Provider);
+
+        // Ein ganzes Meeting mit unbekanntem Anbieter bleibt lesbar.
+        var meeting = Support.Meeting(new[] { ("Anna", "Hallo.") });
+        meeting.Summary = new MeetingSummary("Kurz.", Support.SampleDate, provider: SummaryProvider.Antigravity);
+        var meetingJson = JsonCoding.Encode(meeting).Replace("\"antigravity\"", "\"ollama\"");
+        Assert.Null(JsonCoding.Decode<MeetingTranscript>(meetingJson).Summary!.Provider);
+    }
+
+    [Fact(DisplayName = "Anbieter: Rohwerte sind stabil")]
+    public void ProviderRawValues()
+    {
+        Assert.Equal(new[] { "claude", "antigravity", "codex" }, SummaryProviderExtensions.All.Select(p => p.RawValue()));
+        Assert.Equal(new[] { "claude", "agy", "codex" }, SummaryProviderExtensions.All.Select(p => p.Command()));
+        foreach (var p in SummaryProviderExtensions.All) Assert.Equal(p, SummaryProviderExtensions.FromRawValue(p.RawValue()));
+        Assert.Null(SummaryProviderExtensions.FromRawValue("gemini"));
+    }
+
     [Fact(DisplayName = "Einstellung: fehlender oder ungültiger Wert heißt „wie das Meeting“")]
     public void SharedSettingsReadSummaryLanguage()
     {

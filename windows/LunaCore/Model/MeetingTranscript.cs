@@ -205,29 +205,40 @@ public static class ExportFormatExtensions
         f == MeetingTranscript.ExportFormat.Text ? "txt" : "md";
 }
 
-/// <summary>Von der Claude CLI erzeugte Zusammenfassung eines Meetings (Markdown).</summary>
+/// <summary>Über eine Anbieter-CLI (Claude, Antigravity oder Codex) erzeugte Zusammenfassung eines Meetings (Markdown).</summary>
 public sealed record MeetingSummary
 {
     [JsonPropertyName("markdown"), JsonRequired] public string Markdown { get; init; } = "";
-    /// <summary>Zeitpunkt, zu dem Claude die Zusammenfassung erstellt hat (bleibt beim Bearbeiten erhalten).</summary>
+    /// <summary>Zeitpunkt, zu dem das Modell die Zusammenfassung erstellt hat (bleibt beim Bearbeiten erhalten).</summary>
     [JsonPropertyName("createdAt"), JsonRequired] public DateTime CreatedAt { get; init; }
     /// <summary>Modell, das in den Einstellungen gewählt war; null = Standard der CLI.</summary>
     [JsonPropertyName("model")] public string? Model { get; init; }
-    /// <summary>Sprache, in der Claude geschrieben hat; null bei Zusammenfassungen vor Version 1.2.</summary>
+    /// <summary>Sprache, in der das Modell geschrieben hat; null bei Zusammenfassungen vor Version 1.2.</summary>
     [JsonPropertyName("language")] public AppLanguage? Language { get; init; }
-    /// <summary>Letzte Bearbeitung durch den Nutzer; null = unverändert, wie Claude sie geschrieben hat.</summary>
+    /// <summary>Letzte Bearbeitung durch den Nutzer; null = unverändert, wie das Modell sie geschrieben hat.</summary>
     [JsonPropertyName("editedAt")] public DateTime? EditedAt { get; init; }
+    /// <summary>
+    /// Über welche CLI die Zusammenfassung entstand; null = Claude (alle Zusammenfassungen vor Version 1.3). Unbekannte
+    /// Werte aus einer neueren Version gelten als null.
+    /// </summary>
+    [JsonPropertyName("provider"), JsonConverter(typeof(OptionalSummaryProviderConverter))]
+    public SummaryProvider? Provider { get; init; }
 
-    public MeetingSummary(string markdown, DateTime createdAt, string? model = null, AppLanguage? language = null, DateTime? editedAt = null)
+    public MeetingSummary(string markdown, DateTime createdAt, string? model = null, AppLanguage? language = null,
+        DateTime? editedAt = null, SummaryProvider? provider = null)
     {
         Markdown = markdown;
         CreatedAt = createdAt;
         Model = model;
         Language = language;
         EditedAt = editedAt;
+        Provider = provider;
     }
 
     [JsonIgnore] public bool IsEdited => EditedAt != null;
+
+    /// <summary>Der Anbieter, auch für alte Dateien ohne das Feld.</summary>
+    [JsonIgnore] public SummaryProvider ResolvedProvider => Provider ?? SummaryProvider.Claude;
 
     /// <summary>
     /// Dieselbe Zusammenfassung mit neuem Text. Leerraum am Rand wird entfernt; ein unveränderter Text gilt nicht als

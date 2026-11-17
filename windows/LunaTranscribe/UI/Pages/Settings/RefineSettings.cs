@@ -38,7 +38,7 @@ public sealed class RefineSettings : SettingsSectionView
             State.RefinerKind.IsCloud()
                 ? Hint("Cloud: Jedes nachbearbeitete Diktat geht über die Claude CLI und dein Claude-Konto an Anthropic (Haiku 5.5, " +
                        "niedriger Aufwand). Kein API-Schlüssel nötig – die CLI muss installiert und angemeldet sein; den Pfad stellst du " +
-                       "unter Meetings → „Zusammenfassung mit Claude“ ein.")
+                       "unter Meetings → „Zusammenfassung“ beim Anbieter Claude ein.")
                 : null,
             new LearnMore
             {
